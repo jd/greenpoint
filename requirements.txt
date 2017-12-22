@@ -1,2 +1,7 @@
 requests
 lxml
+yaml
+sqlalchemy
+click
+daiquiri
+cachetools

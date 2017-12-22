@@ -1,7 +1,6 @@
-import enum
-import collections
 import datetime
 
+import cachetools.func
 import daiquiri
 from lxml import html
 import requests
@@ -15,59 +14,144 @@ LOG = daiquiri.getLogger(__name__)
 TWO_YEARS = datetime.timedelta(days=365 * 2)
 
 
-class TransactionOperation(enum.Enum):
-    BUY = 0
-    SELL = 1
-    DIVIDEND = 2
-    TAXES = 3
-
-
-Transaction = collections.namedtuple('Transaction', [
-    "instrument",
-    "operation",
-    "date",
-    "quantity",
-    "price",
-    "fees",
-])
-
-
 class Fortuneo(object):
 
     ACCESS_PAGE = "https://mabanque.fortuneo.fr/checkacces"
     PEA_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-titres.jsp?ca=%s"
+    INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
-    def __init__(self, login, password, pea_id=None):
+    def __init__(self, conf):
         self.session = requests.Session()
         login = self.session.post(self.ACCESS_PAGE,
-                                  data={"login": login, "passwd": password})
+                                  data={"login": conf['login'],
+                                        "passwd": conf['password']})
         self.cookies = login.cookies
         # TODO(jd) Find PEA automatically by parsing login page
-        self.pea_id = pea_id
+        self.pea_id = conf['pea_id']
+        self.instruments = conf.get('instruments')
 
     @staticmethod
     def _translate_op(operation):
         op = operation.lower()
         if op in ("vente comptant", "rachat part sicav externe"):
-            return TransactionOperation.SELL
+            return "sell"
         elif op in ("achat comptant", "script-parts sicav externe"):
-            return TransactionOperation.BUY
+            return "buy"
         elif op.startswith("encaissement coupons"):
-            return TransactionOperation.DIVIDEND
+            return "dividend"
         elif op.startswith("taxe transac"):
-            return TransactionOperation.TAXES
+            return "taxes"
         raise ValueError("Unknown transaction type")
 
     @staticmethod
     def _to_float(s):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
-    def get_pea_history(self):
+    def list_transactions(self):
+        return self._get_pea_history()
+
+    @cachetools.func.ttl_cache(maxsize=4096, ttl=3600*24)
+    def _get_instrument_info(self, instrument):
+        LOG.debug("Fetching instrument %s", instrument)
+        if instrument in self.instruments:
+            LOG.debug("Instrument %s found in config", instrument)
+            info = self.instruments[instrument]
+            # If it's not a string, return the override
+            if not isinstance(info, str):
+                return info
+            instrument = info
+
+        if instrument.startswith("http://"):
+            url = instrument
+        else:
+            url = self.INSTRUMENT_SEARCH_PAGE % instrument
+
+        page = self.session.get(url)
+        tree = html.fromstring(page.content)
+        self.tree = tree
+        try:
+            caracts = tree.xpath(
+                '//table[@class="caracteristics-values"]/tr/td/span/text()'
+            )
+            if caracts[1].strip() == "Action":
+                type = "stock"
+            else:
+                raise ValueError("Unknown type %s" % caracts[1])
+            pea = caracts[4].strip() == "oui"
+            pea_pme = caracts[5].strip() == "oui"
+            ttf = caracts[6].strip() == "oui"
+            symbol, isin, exchange = map(
+                lambda x: x.strip(),
+                tree.xpath(
+                    '//p[@class="digest-header-name-details"]/text()'
+                )[0].split("-")
+            )
+        except (IndexError, ValueError):
+            # ETF
+            try:
+                caracts = tree.xpath(
+                    '//table[@class="caracteristics-values"][1]/tr/td/span/text()'
+                )
+                pea, pea_pme, ttf = map(
+                    lambda x: x.strip().lower() == "oui",
+                    caracts[8].split("/")
+                )
+
+                # isin = caracts[0]
+                # exchange = caracts[1]
+                if caracts[6].strip() == "ETF":
+                    type = "ETF"
+                else:
+                    raise ValueError("Unknown type %s" % caracts[6])
+
+                symbol, isin, exchange = map(
+                    lambda x: x.strip(),
+                    tree.xpath(
+                        '//p[@class="digest-header-name-details"]/text()'
+                    )[0].split("-")
+                )
+            except (ValueError, IndexError):
+                # Mutual funds
+                try:
+                    cols = tree.xpath(
+                        '//table[@class="caracteristics-values"]/tr/td/span/text()'
+                    )
+                    pea, pea_pme, fortuneo_vie = (cols[10].strip() == "oui",
+                                                  cols[11].strip() == "oui",
+                                                  cols[12].strip() == "oui")
+                    symbol, isin = map(
+                        lambda x: x.strip(),
+                        tree.xpath(
+                            '//p[@class="digest-header-name-details"]/text()'
+                        )[0].split("-")
+                    )
+                    exchange = None
+                    ttf = False
+                    type = "fund"
+                except (ValueError, IndexError):
+                    LOG.error("Unable to find info for %s", instrument)
+                    return {"name": instrument}
+
+        data = {
+            "type": type,
+            "name": instrument,
+            "pea": pea,
+            "pea_pme": pea_pme,
+            "ttf": ttf,
+            "symbol": symbol,
+            "isin": isin,
+            "exchange": exchange,
+        }
+        LOG.debug("Found info %s", data)
+        return data
+
+    def _get_pea_history(self):
         if self.pea_id is None:
             return
 
         end = datetime.datetime.now()
         start = (end - TWO_YEARS)
+
         txs = []
 
         while True:
@@ -83,25 +167,26 @@ class Fortuneo(object):
 
             tree = html.fromstring(page.content)
             history = tree.xpath(
-                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td')
+                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td/text()')
 
             if len(history) == 0:
                 break
 
-            for inst, op, xchange, date, qty, ppu, raw, fees, net, currency in map(lambda t: tuple(map(lambda x: x.text.strip(), t)),
-                                                                                   utils.grouper(history, 10)):
+            for inst, op, xchange, date, qty, ppu, raw, fees, net, currency in map(
+                    lambda t: tuple(map(lambda x: x.strip(), t)),
+                    utils.grouper(history, 10)):
                 try:
                     op = self._translate_op(op)
                 except ValueError:
                     LOG.warning("Ignoring unknown tranaction type: %s", op)
                     continue
 
-                qty = int(qty)
+                qty = float(qty)
 
-                if op == TransactionOperation.TAXES:
+                if op == "taxes":
                     fees = self._to_float(raw)
                     ppu = self._to_float(ppu)
-                elif op == TransactionOperation.DIVIDEND:
+                elif op == "dividend":
                     ppu = self._to_float(net) / qty
                     # There is no fees, it's just the change, so use the net amount
                     # to get it
@@ -110,13 +195,23 @@ class Fortuneo(object):
                     ppu = self._to_float(ppu)
                     fees = self._to_float(fees)
 
-                txs.append(Transaction(
-                    # FIXME(jd) Normalize + xchange,
-                    inst, op,
-                    datetime.datetime.strptime(date, "%d/%m/%Y"),
-                    qty, ppu, fees))
+                txs.append({
+                    "instrument": self._get_instrument_info(inst),
+                    "operation": op,
+                    "date": datetime.datetime.strptime(date, "%d/%m/%Y"),
+                    "quantity": qty,
+                    "price": ppu,
+                    "fees": fees,
+                    # Currency is always EUR anyway
+                    "currency": "EUR",
+                })
 
             end = start - datetime.timedelta(days=1)
             start = end - TWO_YEARS
 
         return txs
+
+
+REGISTRY = {
+    "fortuneo": Fortuneo,
+}
