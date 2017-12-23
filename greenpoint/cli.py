@@ -38,12 +38,18 @@ def import_(name):
     txs = b.list_transactions()
     storage.save_transactions(name, txs)
 
-# @main.command()
-# def fetch():
-#     conf = config.get_config()
-#     for broker in conf['brokers']:
-#         txs = storage.load_transactions(broker)
-#         for tx in 
+@main.command()
+def fetch():
+    conf = config.get_config()
+    isins = set()
+    for broker in conf['brokers']:
+        txs = storage.load_transactions(broker)
+        for tx in txs:
+            try:
+                isins.add(tx['instrument']['isin'])
+            except KeyError:
+                LOG.warning("Ignoring transaction: %s", tx)
+    print(isins)
 
 
 if __name__ == '__main__':

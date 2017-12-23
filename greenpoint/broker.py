@@ -17,6 +17,7 @@ TWO_YEARS = datetime.timedelta(days=365 * 2)
 class Fortuneo(object):
 
     ACCESS_PAGE = "https://mabanque.fortuneo.fr/checkacces"
+    HOME_PAGE = "https://mabanque.fortuneo.fr/fr/prive/default.jsp?ANav=1"
     PEA_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-titres.jsp?ca=%s"
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
@@ -26,8 +27,13 @@ class Fortuneo(object):
                                   data={"login": conf['login'],
                                         "passwd": conf['password']})
         self.cookies = login.cookies
-        # TODO(jd) Find PEA automatically by parsing login page
-        self.pea_id = conf['pea_id']
+        home = self.session.get(self.HOME_PAGE, cookies=self.cookies)
+        tree = html.fromstring(home.content)
+        pea = tree.xpath('//div[@class="pea compte"]/a')
+        if pea:
+            self.pea_id = pea[0].get('rel')
+        else:
+            self.pea_id = None
         self.instruments = conf.get('instruments')
 
     @staticmethod
@@ -53,16 +59,17 @@ class Fortuneo(object):
     @cachetools.func.ttl_cache(maxsize=4096, ttl=3600*24)
     def _get_instrument_info(self, instrument):
         LOG.debug("Fetching instrument %s", instrument)
+
         if instrument in self.instruments:
             LOG.debug("Instrument %s found in config", instrument)
             info = self.instruments[instrument]
             # If it's not a string, return the override
             if not isinstance(info, str):
                 return info
-            instrument = info
-
-        if instrument.startswith("http://"):
-            url = instrument
+            if info.startswith("http://") or info.startswith("https://"):
+                url = info
+            else:
+                url = self.INSTRUMENT_SEARCH_PAGE % info
         else:
             url = self.INSTRUMENT_SEARCH_PAGE % instrument
 
@@ -119,7 +126,7 @@ class Fortuneo(object):
                     pea, pea_pme, fortuneo_vie = (cols[10].strip() == "oui",
                                                   cols[11].strip() == "oui",
                                                   cols[12].strip() == "oui")
-                    symbol, isin = map(
+                    isin, _ = map(
                         lambda x: x.strip(),
                         tree.xpath(
                             '//p[@class="digest-header-name-details"]/text()'
@@ -127,6 +134,7 @@ class Fortuneo(object):
                     )
                     exchange = None
                     ttf = False
+                    symbol = None
                     type = "fund"
                 except (ValueError, IndexError):
                     LOG.error("Unable to find info for %s", instrument)
@@ -147,7 +155,7 @@ class Fortuneo(object):
 
     def _get_pea_history(self):
         if self.pea_id is None:
-            return
+            return []
 
         end = datetime.datetime.now()
         start = (end - TWO_YEARS)
