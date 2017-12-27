@@ -194,18 +194,27 @@ class Fortuneo(object):
                     continue
 
                 qty = float(qty)
+                taxes = 0
 
-                if op == "taxes":
-                    fees = self._to_float(raw)
-                    ppu = self._to_float(ppu)
-                elif op == "dividend":
+                if op == "dividend":
                     ppu = self._to_float(net) / qty
                     # There is no fees, it's just the change, so use the net amount
                     # to get it
                     fees = 0
+                elif op == "taxes":
+                    # FIXME(jd) should be sell/buy since it's TTF and included
+                    # in the previous transaction
+                    taxes = self._to_float(fees)
+                    fees = 0
+                    ppu = 0
                 else:
-                    ppu = self._to_float(ppu)
-                    fees = self._to_float(fees)
+                    if currency != "EUR":
+                        ppu = abs(self._to_float(net)) / qty
+                        # Fees is change + fees…
+                        fees = 0
+                    else:
+                        ppu = self._to_float(ppu)
+                        fees = self._to_float(fees)
 
                 txs.append({
                     "instrument": self._get_instrument_info(inst),
@@ -214,6 +223,7 @@ class Fortuneo(object):
                     "quantity": qty,
                     "price": ppu,
                     "fees": fees,
+                    "taxes": taxes,
                     # Currency is always EUR anyway
                     "currency": "EUR",
                 })

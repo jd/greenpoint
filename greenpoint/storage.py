@@ -1,3 +1,4 @@
+import operator
 import os.path
 
 import yaml
@@ -10,4 +11,4 @@ def save_transactions(broker, txs):
 
 def load_transactions(broker):
     with open(os.path.join("data", broker + "-transactions.yaml"), "r") as f:
-        return yaml.load(f.read())
+        return sorted(yaml.load(f.read()), key=operator.itemgetter("date"))
