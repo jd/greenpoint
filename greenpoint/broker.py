@@ -29,12 +29,16 @@ class Fortuneo(object):
         self.cookies = login.cookies
         home = self.session.get(self.HOME_PAGE, cookies=self.cookies)
         tree = html.fromstring(home.content)
-        pea = tree.xpath('//div[@class="pea compte"]/a')
-        if pea:
-            self.pea_id = pea[0].get('rel')
+        account_type = conf.get('account', '').lower()
+        if account_type == 'pea':
+            pea = tree.xpath('//div[@class="pea compte"]/a')
+            if pea:
+                self.pea_id = pea[0].get('rel')
+            else:
+                self.pea_id = None
         else:
-            self.pea_id = None
-        self.instruments = conf.get('instruments')
+            raise ValueError("No valid `account` specified in config")
+        self.instruments = conf.get('instruments', {})
 
     @staticmethod
     def _translate_op(operation):
