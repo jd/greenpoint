@@ -66,27 +66,35 @@ def portfolio(broker):
 
     txs = storage.load_transactions(broker)
 
+    currencies = collections.defaultdict(lambda: 0)
+
     for tx in txs:
         key = tuple(sorted(tx["instrument"].items(),
                            key=operator.itemgetter(0)))
         instrument = instruments[key]
-        instrument["fees"] += tx.get("fees", 0)
-        instrument["taxes"] += tx.get("taxes", 0)
+        taxes = tx.get("taxes", 0)
+        fees = tx.get("fees", 0)
+        instrument["fees"] += fees
+        instrument["taxes"] += taxes
+        currencies[tx['currency']] += fees + taxes
         if tx["operation"] == "buy":
+            amount = tx["price"] * tx["quantity"]
             total = (instrument["quantity"] + tx["quantity"])
             if total != 0:
                 instrument["price"] = (
                     instrument["price"] * instrument["quantity"] +
-                    tx["price"] * tx["quantity"]
+                    amount
                 ) / total
                 instrument["average_price_bought"] = (
                     (instrument["average_price_bought"] * instrument["bought"])
-                    + tx["price"] * tx["quantity"]
+                    + amount
                 ) / total
             instrument["quantity"] += tx["quantity"]
             instrument["trades"] += 1
             instrument["bought"] += tx["quantity"]
+            currencies[tx['currency']] -= amount
         elif tx["operation"] == "sell":
+            amount = tx["price"] * tx["quantity"]
             instrument["quantity"] -= tx["quantity"]
             instrument["trades"] += 1
             instrument["gain"] += ((tx["price"] - instrument["price"]) *
@@ -95,16 +103,20 @@ def portfolio(broker):
             if total != 0:
                 instrument["average_price_sold"] = (
                     (instrument["average_price_sold"] * instrument["sold"])
-                    + tx["price"] * tx["quantity"]
+                    + amount
                 ) / total
             instrument["sold"] += tx["quantity"]
+            currencies[tx['currency']] += amount
         elif tx["operation"] == "dividend":
-            instrument["dividend"] += tx["quantity"] * tx["price"]
+            amount = tx["price"] * tx["quantity"]
+            instrument["dividend"] += amount
+            currencies[tx['currency']] += amount
 
     import pprint
     for k, v in instruments.items():
         pprint.pprint(k)
         pprint.pprint(v)
+    pprint.pprint(currencies)
 
 
 if __name__ == '__main__':
