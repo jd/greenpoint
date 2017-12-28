@@ -69,7 +69,7 @@ def portfolio(broker):
     currencies = collections.defaultdict(lambda: 0)
 
     for tx in txs:
-        if tx["operation"] == "deposit":
+        if tx["operation"] in ("deposit", "withdrawal"):
             currencies[tx['currency']] += tx['amount']
             continue
 
@@ -80,7 +80,6 @@ def portfolio(broker):
         fees = tx.get("fees", 0)
         instrument["fees"] += fees
         instrument["taxes"] += taxes
-        currencies[tx['currency']] += fees + taxes
         if tx["operation"] == "buy":
             amount = tx["price"] * tx["quantity"]
             total = (instrument["quantity"] + tx["quantity"])
@@ -96,7 +95,6 @@ def portfolio(broker):
             instrument["quantity"] += tx["quantity"]
             instrument["trades"] += 1
             instrument["bought"] += tx["quantity"]
-            currencies[tx['currency']] -= amount
         elif tx["operation"] == "sell":
             amount = tx["price"] * tx["quantity"]
             instrument["quantity"] -= tx["quantity"]
@@ -110,15 +108,13 @@ def portfolio(broker):
                     + amount
                 ) / total
             instrument["sold"] += tx["quantity"]
-            currencies[tx['currency']] += amount
         elif tx["operation"] == "dividend":
             amount = tx["price"] * tx["quantity"]
             instrument["dividend"] += amount
-            currencies[tx['currency']] += amount
 
     import pprint
     for k, v in instruments.items():
-        pprint.pprint(k)
+        print(dict(k)['name'])
         pprint.pprint(v)
     pprint.pprint(currencies)
 

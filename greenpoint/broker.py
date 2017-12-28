@@ -18,8 +18,11 @@ class Fortuneo(object):
 
     ACCESS_PAGE = "https://mabanque.fortuneo.fr/checkacces"
     HOME_PAGE = "https://mabanque.fortuneo.fr/fr/prive/default.jsp?ANav=1"
-    PEA_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-titres.jsp?ca=%s"
-    PEA_CASH_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-especes.jsp?ca=%s"
+
+    HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-titres.jsp?ca=%s"
+
+    CASH_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-especes.jsp?ca=%s"
+
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
@@ -36,6 +39,16 @@ class Fortuneo(object):
             "pea_pme": True,
             "ttf": False,
             "symbol": "ALOCT",
+            "exchange": "Euronext Paris",
+        },
+        "KERLINK DS": {
+            "isin": "FR0013251287",
+            "type": "stock",
+            "name": "Kerlink DS",
+            "pea": False,
+            "pea_pme": False,
+            "ttf": False,
+            "symbol": "KLKDS",
             "exchange": "Euronext Paris",
         },
         "ILIAD": "FR0004035913",
@@ -55,13 +68,14 @@ class Fortuneo(object):
         self.cookies = login.cookies
         home = self.session.get(self.HOME_PAGE, cookies=self.cookies)
         tree = html.fromstring(home.content)
-        account_type = conf.get('account', '').lower()
-        if account_type == 'pea':
-            pea = tree.xpath('//div[@class="pea compte"]/a')
-            if pea:
-                self.pea_id = pea[0].get('rel')
-            else:
-                self.pea_id = None
+        self.account_type = conf.get('account', '').lower()
+        if self.account_type == 'pea-pme':
+            self.account_type = 'ppe'  # Fortuneo name
+        if self.account_type in ('pea', 'ppe'):
+            account = tree.xpath(
+                '//div[@class="%s compte"]/a' % self.account_type
+            )
+            self.account_id = account[0].get('rel')
         else:
             raise ValueError("No valid `account` specified in config")
 
@@ -70,7 +84,8 @@ class Fortuneo(object):
         op = operation.lower()
         if op in ("vente comptant", "rachat part sicav externe"):
             return "sell"
-        elif op in ("achat comptant", "script-parts sicav externe"):
+        elif op in ("achat comptant", "script-parts sicav externe",
+                    "Dépôt de titres vifs"):
             return "buy"
         elif op.startswith("encaissement coupons"):
             return "dividend"
@@ -81,9 +96,6 @@ class Fortuneo(object):
     @staticmethod
     def _to_float(s):
         return float(s.replace(",", ".").replace("\xa0", ""))
-
-    def list_transactions(self):
-        return self._get_pea_history()
 
     @cachetools.func.ttl_cache(maxsize=4096, ttl=3600*24)
     def _get_instrument_info(self, instrument):
@@ -180,10 +192,7 @@ class Fortuneo(object):
         LOG.debug("Found info %s", data)
         return data
 
-    def _get_pea_history(self):
-        if self.pea_id is None:
-            return []
-
+    def list_transactions(self):
         end = datetime.datetime.now()
         start = (end - TWO_YEARS)
 
@@ -191,7 +200,7 @@ class Fortuneo(object):
 
         while True:
             page = self.session.post(
-                self.PEA_CASH_HISTORY_PAGE % self.pea_id,
+                self.CASH_HISTORY_PAGE % (self.account_type, self.account_id),
                 data={
                     "offset": 0,
                     "dateDebut": start.strftime("%d/%m/%Y"),
@@ -210,15 +219,20 @@ class Fortuneo(object):
             for _, date_op, date_value, label, debit, credit in map(
                     lambda t: tuple(map(lambda x: x.strip(), t)),
                     utils.grouper(history, 6)):
-                if label.lower() == "versement":
-                    txs.append({
-                        "instrument": None,
-                        "operation": "deposit",
-                        "date": datetime.datetime.strptime(date_op, "%d/%m/%Y"),
-                        "amount": self._to_float(credit),
-                        # Currency is always EUR anyway
-                        "currency": "EUR",
-                    })
+                if credit:
+                    amount = self._to_float(credit)
+                    operation = "deposit"
+                else:
+                    amount = self._to_float(debit)
+                    operation = "withdrawal"
+                txs.append({
+                    "instrument": None,
+                    "operation": operation,
+                    "date": datetime.datetime.strptime(date_op, "%d/%m/%Y"),
+                    "amount": amount,
+                    # Currency is always EUR anyway
+                    "currency": "EUR",
+                })
             end = start - datetime.timedelta(days=1)
             start = end - TWO_YEARS
 
@@ -227,7 +241,7 @@ class Fortuneo(object):
 
         while True:
             page = self.session.post(
-                self.PEA_HISTORY_PAGE % self.pea_id,
+                self.HISTORY_PAGE % (self.account_type, self.account_id),
                 data={
                     "offset": 0,
                     "dateDebut": start.strftime("%d/%m/%Y"),
