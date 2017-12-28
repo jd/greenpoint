@@ -22,6 +22,31 @@ class Fortuneo(object):
     PEA_CASH_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-especes.jsp?ca=%s"
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
+    INSTRUMENTS = {
+        "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23",
+        "AMUNDI ETF S&P 500 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-s-p-500-ucits-etf-500-FR0010892224-23",
+        "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23",
+        "SANOFI": "FR0000120578",
+        "LVMH": "FR0000121014",
+        "OCTO TECHNOLOGY": {
+            "isin": "FR0004157428",
+            "type": "stock",
+            "name": "Octo Technology",
+            "pea": True,
+            "pea_pme": True,
+            "ttf": False,
+            "symbol": "ALOCT",
+            "exchange": "Euronext Paris",
+        },
+        "ILIAD": "FR0004035913",
+        "DIRECT ENERGIE": "FR0004191674",
+        "ROYAL DUTCH SHELLB": "FTN000046GB00B03MM408",
+        "Hsbc Small Cap France A A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-hsbc-small-cap-france-a-a-i-FR0010058628-26",
+        "Federal Indiciel Us P A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-federal-indiciel-us-p-a-i-FR0000988057-26",
+        "BNP Paribas Easy MSCI Europe Small Caps ex Controversial Weapons UCITS ETF Capitalisation": "LU1291101555",
+        "Ensco 'A'": "https://bourse.fortuneo.fr/actions/cours-ensco-a-ESV-GB00B4VLR192-75",
+    }
+
     def __init__(self, conf):
         self.session = requests.Session()
         login = self.session.post(self.ACCESS_PAGE,
@@ -39,7 +64,6 @@ class Fortuneo(object):
                 self.pea_id = None
         else:
             raise ValueError("No valid `account` specified in config")
-        self.instruments = conf.get('instruments', {})
 
     @staticmethod
     def _translate_op(operation):
@@ -65,9 +89,9 @@ class Fortuneo(object):
     def _get_instrument_info(self, instrument):
         LOG.debug("Fetching instrument %s", instrument)
 
-        if instrument in self.instruments:
-            LOG.debug("Instrument %s found in config", instrument)
-            info = self.instruments[instrument]
+        info = self.INSTRUMENTS.get(instrument)
+        if info:
+            LOG.debug("Instrument %s pre-configured", instrument)
             # If it's not a string, return the override
             if not isinstance(info, str):
                 return info
