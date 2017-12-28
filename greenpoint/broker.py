@@ -79,8 +79,8 @@ class Fortuneo(object):
 
         page = self.session.get(url)
         tree = html.fromstring(page.content)
-        self.tree = tree
-        try:
+
+        if page.url.startswith("https://bourse.fortuneo.fr/actions/"):
             caracts = tree.xpath(
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
@@ -97,52 +97,50 @@ class Fortuneo(object):
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-        except (IndexError, ValueError):
+        elif page.url.startswith("https://bourse.fortuneo.fr/trackers/"):
             # ETF
-            try:
-                caracts = tree.xpath(
-                    '//table[@class="caracteristics-values"][1]/tr/td/span/text()'
-                )
-                pea, pea_pme, ttf = map(
-                    lambda x: x.strip().lower() == "oui",
-                    caracts[8].split("/")
-                )
+            caracts = tree.xpath(
+                '//table[@class="caracteristics-values"][1]/tr/td/span/text()'
+            )
+            pea, pea_pme, ttf = map(
+                lambda x: x.strip().lower() == "oui",
+                caracts[8].split("/")
+            )
 
-                # isin = caracts[0]
-                # exchange = caracts[1]
-                if caracts[6].strip() == "ETF":
-                    type = "ETF"
-                else:
-                    raise ValueError("Unknown type %s" % caracts[6])
+            # isin = caracts[0]
+            # exchange = caracts[1]
+            if caracts[6].strip() == "ETF":
+                type = "ETF"
+            else:
+                raise ValueError("Unknown type %s" % caracts[6])
 
-                symbol, isin, exchange = map(
-                    lambda x: x.strip(),
-                    tree.xpath(
-                        '//p[@class="digest-header-name-details"]/text()'
-                    )[0].split("-")
-                )
-            except (ValueError, IndexError):
-                # Mutual funds
-                try:
-                    cols = tree.xpath(
-                        '//table[@class="caracteristics-values"]/tr/td/span/text()'
-                    )
-                    pea, pea_pme, fortuneo_vie = (cols[10].strip() == "oui",
-                                                  cols[11].strip() == "oui",
-                                                  cols[12].strip() == "oui")
-                    isin, _ = map(
-                        lambda x: x.strip(),
-                        tree.xpath(
-                            '//p[@class="digest-header-name-details"]/text()'
-                        )[0].split("-")
-                    )
-                    exchange = None
-                    ttf = False
-                    symbol = None
-                    type = "fund"
-                except (ValueError, IndexError):
-                    LOG.error("Unable to find info for %s", instrument)
-                    return {"name": instrument}
+            symbol, isin, exchange = map(
+                lambda x: x.strip(),
+                tree.xpath(
+                    '//p[@class="digest-header-name-details"]/text()'
+                )[0].split("-")
+            )
+        elif page.url.startswith("https://bourse.fortuneo.fr/sicav-fonds/"):
+            # Mutual funds
+            cols = tree.xpath(
+                '//table[@class="caracteristics-values"]/tr/td/span/text()'
+            )
+            pea, pea_pme, fortuneo_vie = (cols[10].strip() == "oui",
+                                          cols[11].strip() == "oui",
+                                          cols[12].strip() == "oui")
+            isin, _ = map(
+                lambda x: x.strip(),
+                tree.xpath(
+                    '//p[@class="digest-header-name-details"]/text()'
+                )[0].split("-")
+            )
+            exchange = None
+            ttf = False
+            symbol = None
+            type = "fund"
+        else:
+            LOG.error("Unable to find info for %s", instrument)
+            return {"name": instrument}
 
         data = {
             "type": type,
