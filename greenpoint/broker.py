@@ -19,6 +19,7 @@ class Fortuneo(object):
     ACCESS_PAGE = "https://mabanque.fortuneo.fr/checkacces"
     HOME_PAGE = "https://mabanque.fortuneo.fr/fr/prive/default.jsp?ANav=1"
     PEA_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-titres.jsp?ca=%s"
+    PEA_CASH_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/pea/historique/historique-especes.jsp?ca=%s"
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     def __init__(self, conf):
@@ -166,6 +167,42 @@ class Fortuneo(object):
 
         while True:
             page = self.session.post(
+                self.PEA_CASH_HISTORY_PAGE % self.pea_id,
+                data={
+                    "offset": 0,
+                    "dateDebut": start.strftime("%d/%m/%Y"),
+                    "dateFin": end.strftime("%d/%m/%Y"),
+                    "nbResultats": 1000,
+                },
+                cookies=self.cookies)
+
+            tree = html.fromstring(page.content)
+            history = tree.xpath(
+                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td/text()')
+
+            if len(history) == 0:
+                break
+
+            for _, date_op, date_value, label, debit, credit in map(
+                    lambda t: tuple(map(lambda x: x.strip(), t)),
+                    utils.grouper(history, 6)):
+                if label.lower() == "versement":
+                    txs.append({
+                        "instrument": None,
+                        "operation": "deposit",
+                        "date": datetime.datetime.strptime(date_op, "%d/%m/%Y"),
+                        "amount": self._to_float(credit),
+                        # Currency is always EUR anyway
+                        "currency": "EUR",
+                    })
+            end = start - datetime.timedelta(days=1)
+            start = end - TWO_YEARS
+
+        end = datetime.datetime.now()
+        start = (end - TWO_YEARS)
+
+        while True:
+            page = self.session.post(
                 self.PEA_HISTORY_PAGE % self.pea_id,
                 data={
                     "offset": 0,
@@ -191,7 +228,7 @@ class Fortuneo(object):
                     LOG.warning("Ignoring unknown tranaction type: %s", op)
                     continue
 
-                qty = float(qty)
+                qty = self._to_float(qty)
                 taxes = 0
 
                 if op == "dividend":

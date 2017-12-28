@@ -69,6 +69,10 @@ def portfolio(broker):
     currencies = collections.defaultdict(lambda: 0)
 
     for tx in txs:
+        if tx["operation"] == "deposit":
+            currencies[tx['currency']] += tx['amount']
+            continue
+
         key = tuple(sorted(tx["instrument"].items(),
                            key=operator.itemgetter(0)))
         instrument = instruments[key]
