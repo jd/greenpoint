@@ -7,6 +7,7 @@ from greenpoint import broker
 from greenpoint import config
 from greenpoint import portfolio as gportfolio
 from greenpoint import storage
+from greenpoint import utils
 
 
 LOG = daiquiri.getLogger(__name__)
@@ -43,10 +44,14 @@ def import_(broker_name):
 
 @main.command()
 @click.argument('broker')
-def portfolio(broker):
+@click.option('--date')
+def portfolio(broker, date=None):
+    if date is not None:
+        date = utils.parse_date(date)
+
     txs = storage.load_transactions(broker)
 
-    instruments, currencies = gportfolio.get_portfolio(txs)
+    instruments, currencies = gportfolio.get_portfolio(txs, date)
 
     import pprint
     for k, v in instruments.items():

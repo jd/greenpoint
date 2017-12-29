@@ -228,7 +228,7 @@ class Fortuneo(object):
                 txs.append({
                     "instrument": None,
                     "operation": operation,
-                    "date": datetime.datetime.strptime(date_op, "%d/%m/%Y"),
+                    "date": datetime.datetime.strptime(date_op, "%d/%m/%Y").date(),
                     "amount": amount,
                     # Currency is always EUR anyway
                     "currency": "EUR",
@@ -292,7 +292,7 @@ class Fortuneo(object):
                 txs.append({
                     "instrument": self._get_instrument_info(inst),
                     "operation": op,
-                    "date": datetime.datetime.strptime(date, "%d/%m/%Y"),
+                    "date": datetime.datetime.strptime(date, "%d/%m/%Y").date(),
                     "quantity": qty,
                     "price": ppu,
                     "fees": fees,

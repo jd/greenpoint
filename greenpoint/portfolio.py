@@ -23,6 +23,9 @@ def get_portfolio(txs, date=None):
     currencies = collections.defaultdict(lambda: 0)
 
     for tx in txs:
+        if date is not None and tx['date'] > date:
+            continue
+
         if tx["operation"] in ("deposit", "withdrawal"):
             currencies[tx['currency']] += tx['amount']
             continue
