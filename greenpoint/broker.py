@@ -22,11 +22,10 @@ class Fortuneo(object):
 
     HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-titres.jsp?ca=%s"
 
-    CASH_HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-especes.jsp?ca=%s"
-
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
+        "LYXOR UCITS ETF Eastern Europe (CECE NTR EUR)": "https://bourse.fortuneo.fr/trackers/cours-lyxor-ucits-etf-eastern-europe-cece-ntr-eur-CEC-FR0010204073-23",
         "AUBAY": "https://bourse.fortuneo.fr/actions/cours-aubay-AUB-FR0000063737-23",
         "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23",
         "AMUNDI ETF S&P 500 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-s-p-500-ucits-etf-500-FR0010892224-23",
@@ -74,10 +73,25 @@ class Fortuneo(object):
         if self.account_type == 'pea-pme':
             self.account_type = 'ppe'  # Fortuneo name
         if self.account_type in ('pea', 'ppe'):
-            account = tree.xpath(
+            account_id = tree.xpath(
                 '//div[@class="%s compte"]/a' % self.account_type
+            )[0].get('rel')
+            self.cash_history_page = (
+                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-especes.jsp?ca=%s" % (
+                    self.account_type, account_id
+                )
             )
-            self.account_id = account[0].get('rel')
+            self.history_page = self.HISTORY_PAGE % (self.account_type,
+                                                     account_id)
+        elif self.account_type == 'ord':
+            account_esp_id = tree.xpath('//div[@class="esp compte"]/a')[0].get('rel')
+            account_id = tree.xpath('//div[@class="ord compte"]/a')[0].get('rel')
+            self.cash_history_page = (
+                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/compte-especes/consulter-situation/consulter-solde.jsp?ca=%s"
+                % account_esp_id
+            )
+            self.history_page = self.HISTORY_PAGE % ("compte-titres-pea",
+                                                     account_id)
         else:
             raise ValueError("No valid `account` specified in config")
 
@@ -200,25 +214,36 @@ class Fortuneo(object):
         txs = []
 
         while True:
-            page = self.session.post(
-                self.CASH_HISTORY_PAGE % (self.account_type, self.account_id),
-                data={
-                    "offset": 0,
-                    "dateDebut": start.strftime("%d/%m/%Y"),
-                    "dateFin": end.strftime("%d/%m/%Y"),
-                    "nbResultats": 1000,
-                },
-                cookies=self.cookies)
+            if self.account_type == "ord":
+                page = self.session.post(
+                    self.cash_history_page,
+                    data={
+                        "dateRechercheDebut": start.strftime("%d/%m/%Y"),
+                        "dateRechercheFin": end.strftime("%d/%m/%Y"),
+                        "nbrEltsParPage": 1000,
+                    },
+                    cookies=self.cookies)
+            else:
+                page = self.session.post(
+                    self.cash_history_page,
+                    data={
+                        "offset": 0,
+                        "dateDebut": start.strftime("%d/%m/%Y"),
+                        "dateFin": end.strftime("%d/%m/%Y"),
+                        "nbResultats": 1000,
+                    },
+                    cookies=self.cookies)
 
             tree = html.fromstring(page.content)
+
             history = tree.xpath(
-                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td/text()')
+                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td')
 
             if len(history) == 0:
                 break
 
             for _, date_op, date_value, label, debit, credit in map(
-                    lambda t: tuple(map(lambda x: x.strip(), t)),
+                    lambda t: tuple(map(lambda x: x.text.strip(), t)),
                     utils.grouper(history, 6)):
                 if credit:
                     amount = self._to_float(credit)
@@ -242,7 +267,7 @@ class Fortuneo(object):
 
         while True:
             page = self.session.post(
-                self.HISTORY_PAGE % (self.account_type, self.account_id),
+                self.history_page,
                 data={
                     "offset": 0,
                     "dateDebut": start.strftime("%d/%m/%Y"),
