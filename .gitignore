@@ -1,3 +1,7 @@
 *.pyc
 data/
+AUTHORS
+ChangeLog
 config.yaml
+.tox
+*.egg-info

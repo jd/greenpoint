@@ -1,8 +1,11 @@
 import datetime
 
 import cachetools.func
+
 import daiquiri
+
 from lxml import html
+
 import requests
 
 from greenpoint import portfolio
@@ -20,7 +23,8 @@ class Fortuneo(object):
     ACCESS_PAGE = "https://mabanque.fortuneo.fr/checkacces"
     HOME_PAGE = "https://mabanque.fortuneo.fr/fr/prive/default.jsp?ANav=1"
 
-    HISTORY_PAGE = "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-titres.jsp?ca=%s"
+    HISTORY_PAGE = ("https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s"
+                    "/historique/historique-titres.jsp?ca=%s")
 
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
@@ -77,17 +81,21 @@ class Fortuneo(object):
                 '//div[@class="%s compte"]/a' % self.account_type
             )[0].get('rel')
             self.cash_history_page = (
-                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/historique/historique-especes.jsp?ca=%s" % (
+                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/"
+                "historique/historique-especes.jsp?ca=%s" % (
                     self.account_type, account_id
                 )
             )
             self.history_page = self.HISTORY_PAGE % (self.account_type,
                                                      account_id)
         elif self.account_type == 'ord':
-            account_esp_id = tree.xpath('//div[@class="esp compte"]/a')[0].get('rel')
-            account_id = tree.xpath('//div[@class="ord compte"]/a')[0].get('rel')
+            account_esp_id = tree.xpath(
+                '//div[@class="esp compte"]/a')[0].get('rel')
+            account_id = tree.xpath(
+                '//div[@class="ord compte"]/a')[0].get('rel')
             self.cash_history_page = (
-                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/compte-especes/consulter-situation/consulter-solde.jsp?ca=%s"
+                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/"
+                "compte-especes/consulter-situation/consulter-solde.jsp?ca=%s"
                 % account_esp_id
             )
             self.history_page = self.HISTORY_PAGE % ("compte-titres-pea",
@@ -113,7 +121,7 @@ class Fortuneo(object):
     def _to_float(s):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
-    @cachetools.func.ttl_cache(maxsize=4096, ttl=3600*24)
+    @cachetools.func.ttl_cache(maxsize=4096, ttl=3600 * 24)
     def _get_instrument_info(self, instrument):
         LOG.debug("Fetching instrument %s", instrument)
 
@@ -140,7 +148,7 @@ class Fortuneo(object):
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
             if caracts[1].strip() == "Action":
-                type = "stock"
+                instrument_kwargs['type'] = "stock"
             else:
                 raise ValueError("Unknown type %s" % caracts[1])
             instrument_kwargs["pea"] = caracts[4].strip() == "oui"
@@ -188,10 +196,8 @@ class Fortuneo(object):
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
             (instrument_kwargs['pea'],
-             instrument_kwargs['pea_pme'],
-             fortuneo_vie) = (cols[10].strip() == "oui",
-                              cols[11].strip() == "oui",
-                              cols[12].strip() == "oui")
+             instrument_kwargs['pea_pme']) = (cols[10].strip() == "oui",
+                                              cols[11].strip() == "oui")
             instrument_kwargs['isin'], _ = map(
                 lambda x: x.strip(),
                 tree.xpath(
@@ -254,7 +260,8 @@ class Fortuneo(object):
                 txs.append({
                     "instrument": None,
                     "operation": operation,
-                    "date": datetime.datetime.strptime(date_op, "%d/%m/%Y").date(),
+                    "date": datetime.datetime.strptime(
+                        date_op, "%d/%m/%Y").date(),
                     "amount": amount,
                     # Currency is always EUR anyway
                     "currency": "EUR",
@@ -283,7 +290,7 @@ class Fortuneo(object):
             if len(history) == 0:
                 break
 
-            for inst, op, xchange, date, qty, ppu, raw, fees, net, currency in map(
+            for inst, op, xchange, date, qty, ppu, raw, fees, net, currency in map(  # noqa
                     lambda t: tuple(map(lambda x: x.strip(), t)),
                     utils.grouper(history, 10)):
                 try:
@@ -297,8 +304,8 @@ class Fortuneo(object):
 
                 if op == "dividend":
                     ppu = self._to_float(net) / qty
-                    # There is no fees, it's just the change, so use the net amount
-                    # to get it
+                    # There is no fees, it's just the change, so use the net
+                    # amount to get it
                     fees = 0
                 elif op == "taxes":
                     # FIXME(jd) should be sell/buy since it's TTF and included
@@ -318,7 +325,8 @@ class Fortuneo(object):
                 txs.append({
                     "instrument": self._get_instrument_info(inst),
                     "operation": op,
-                    "date": datetime.datetime.strptime(date, "%d/%m/%Y").date(),
+                    "date": datetime.datetime.strptime(
+                        date, "%d/%m/%Y").date(),
                     "quantity": qty,
                     "price": ppu,
                     "fees": fees,

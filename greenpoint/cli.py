@@ -1,6 +1,7 @@
 import logging
 
 import click
+
 import daiquiri
 
 from greenpoint import broker
@@ -19,7 +20,6 @@ def main():
     daiquiri.setup(level=logging.DEBUG if conf.get("debug") else logging.INFO)
 
 
-F = None
 @main.command(name="import")
 @click.argument('broker_name')
 def import_(broker_name):
@@ -34,10 +34,6 @@ def import_(broker_name):
 
     LOG.info("Importing transactions for %s", broker_name)
     b = broker_type(broker_config)
-
-    global F
-    F = b
-
     txs = b.list_transactions()
     storage.save_transactions(broker_name, txs)
 

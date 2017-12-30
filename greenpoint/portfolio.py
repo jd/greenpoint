@@ -1,4 +1,5 @@
 import collections
+
 import voluptuous
 
 
@@ -22,7 +23,7 @@ class Instrument(_Base):
         "ttf": bool,
         "exchange": str,
         "name": str,
-        "type": voluptuous.Any("stock", "etf", "fund"),
+        voluptuous.Required("type"): voluptuous.Any("stock", "etf", "fund"),
     })
 
     def __getattr__(self, key):
@@ -81,8 +82,9 @@ def get_portfolio(txs, date=None):
                     amount
                 ) / total
                 instrument["average_price_bought"] = (
-                    (instrument["average_price_bought"] * instrument["bought"])
-                    + amount
+                    (instrument["average_price_bought"] *
+                     instrument["bought"]) +
+                    amount
                 ) / total
             instrument["quantity"] += tx["quantity"]
             instrument["trades"] += 1
@@ -96,8 +98,8 @@ def get_portfolio(txs, date=None):
             total = tx["quantity"] + instrument["sold"]
             if total != 0:
                 instrument["average_price_sold"] = (
-                    (instrument["average_price_sold"] * instrument["sold"])
-                    + amount
+                    (instrument["average_price_sold"] * instrument["sold"]) +
+                    amount
                 ) / total
             instrument["sold"] += tx["quantity"]
         elif tx["operation"] == "dividend":

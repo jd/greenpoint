@@ -1,5 +1,7 @@
-from dateutil import tz
 import itertools
+
+from dateutil import tz
+
 import iso8601
 
 
