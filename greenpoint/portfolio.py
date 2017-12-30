@@ -1,3 +1,5 @@
+import datetime
+
 import attr
 import enum
 
@@ -32,6 +34,46 @@ class Instrument(object):
         attr.validators.instance_of(str)), cmp=False)
 
 
+class CashOperationType(enum.Enum):
+    WITHDRAWAL = "withdrawal"
+    DEPOSIT = "deposit"
+
+
+@attr.s(frozen=True)
+class CashOperation(object):
+    type = attr.ib(validator=attr.validators.instance_of(CashOperationType))
+    date = attr.ib(validator=attr.validators.instance_of(datetime.date))
+    amount = attr.ib(validator=attr.validators.instance_of(float))
+    currency = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)),
+                       converter=attr.converters.optional(str.upper))
+
+
+class OperationType(enum.Enum):
+    BUY = "buy"
+    SELL = "sell"
+    DIVIDEND = "dividend"
+    TAX = "tax"
+
+
+@attr.s(frozen=True)
+class Operation(object):
+    instrument = attr.ib(validator=attr.validators.instance_of(Instrument))
+    type = attr.ib(validator=attr.validators.instance_of(OperationType))
+    date = attr.ib(validator=attr.validators.instance_of(datetime.date))
+    quantity = attr.ib(validator=attr.validators.instance_of(float))
+    price = attr.ib(validator=attr.validators.instance_of(float))
+    fees = attr.ib(validator=attr.validators.instance_of(float))
+    taxes = attr.ib(validator=attr.validators.instance_of(float))
+    currency = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)),
+                       converter=attr.converters.optional(str.upper))
+
+    @property
+    def amount(self):
+        return self.quantity * self.price
+
+
 def _default_instrument():
     return {
         "price": 0,
@@ -53,50 +95,44 @@ def get_portfolio(txs, date=None):
     currencies = collections.defaultdict(lambda: 0)
 
     for tx in txs:
-        if date is not None and tx['date'] > date:
+        if date is not None and tx.date > date:
             continue
 
-        if tx["operation"] in ("deposit", "withdrawal"):
-            currencies[tx['currency']] += tx['amount']
+        if isinstance(tx, CashOperation):
+            currencies[tx.currency] += tx.amount
             continue
 
-        key = tx["instrument"]
-        instrument = instruments[key]
-        taxes = tx.get("taxes", 0)
-        fees = tx.get("fees", 0)
-        instrument["fees"] += fees
-        instrument["taxes"] += taxes
-        if tx["operation"] == "buy":
-            amount = tx["price"] * tx["quantity"]
-            total = (instrument["quantity"] + tx["quantity"])
+        instrument = instruments[tx.instrument]
+        instrument["fees"] += tx.fees
+        instrument["taxes"] += tx.taxes
+        if tx.type == OperationType.BUY:
+            total = (instrument["quantity"] + tx.quantity)
             if total != 0:
                 instrument["price"] = (
                     instrument["price"] * instrument["quantity"] +
-                    amount
+                    tx.amount
                 ) / total
                 instrument["average_price_bought"] = (
                     (instrument["average_price_bought"] *
                      instrument["bought"]) +
-                    amount
+                    tx.amount
                 ) / total
-            instrument["quantity"] += tx["quantity"]
+            instrument["quantity"] = total
             instrument["trades"] += 1
-            instrument["bought"] += tx["quantity"]
-        elif tx["operation"] == "sell":
-            amount = tx["price"] * tx["quantity"]
-            instrument["quantity"] -= tx["quantity"]
+            instrument["bought"] += tx.quantity
+        elif tx.type == OperationType.SELL:
+            instrument["quantity"] -= tx.quantity
             instrument["trades"] += 1
-            instrument["gain"] += ((tx["price"] - instrument["price"]) *
-                                   tx["quantity"])
-            total = tx["quantity"] + instrument["sold"]
+            instrument["gain"] += ((tx.price - instrument["price"]) *
+                                   tx.quantity)
+            total = tx.quantity + instrument["sold"]
             if total != 0:
                 instrument["average_price_sold"] = (
                     (instrument["average_price_sold"] * instrument["sold"]) +
-                    amount
+                    tx.amount
                 ) / total
-            instrument["sold"] += tx["quantity"]
-        elif tx["operation"] == "dividend":
-            amount = tx["price"] * tx["quantity"]
-            instrument["dividend"] += amount
+            instrument["sold"] += tx.quantity
+        elif tx.type == OperationType.DIVIDEND:
+            instrument["dividend"] += tx.amount
 
     return instruments, currencies

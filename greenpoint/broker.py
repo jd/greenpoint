@@ -109,14 +109,14 @@ class Fortuneo(object):
     def _translate_op(operation):
         op = operation.lower()
         if op in ("vente comptant", "rachat part sicav externe"):
-            return "sell"
+            return portfolio.OperationType.SELL
         elif op in ("achat comptant", "script-parts sicav externe",
                     "Dépôt de titres vifs"):
-            return "buy"
+            return portfolio.OperationType.BUY
         elif op.startswith("encaissement coupons"):
-            return "dividend"
+            return portfolio.OperationType.DIVIDEND
         elif op.startswith("taxe transac"):
-            return "taxes"
+            return portfolio.OperationType.TAX
         raise ValueError("Unknown transaction type")
 
     @staticmethod
@@ -257,19 +257,18 @@ class Fortuneo(object):
                     utils.grouper(history, 6)):
                 if credit:
                     amount = self._to_float(credit)
-                    operation = "deposit"
+                    operation = portfolio.CashOperationType.DEPOSIT
                 else:
                     amount = self._to_float(debit)
-                    operation = "withdrawal"
-                txs.append({
-                    "instrument": None,
-                    "operation": operation,
-                    "date": datetime.datetime.strptime(
+                    operation = portfolio.CashOperationType.WITHDRAWAL
+                txs.append(portfolio.CashOperation(
+                    type=operation,
+                    date=datetime.datetime.strptime(
                         date_op, "%d/%m/%Y").date(),
-                    "amount": amount,
+                    amount=amount,
                     # Currency is always EUR anyway
-                    "currency": "EUR",
-                })
+                    currency="EUR",
+                ))
             end = start - datetime.timedelta(days=1)
             start = end - TWO_YEARS
 
@@ -304,40 +303,40 @@ class Fortuneo(object):
                     continue
 
                 qty = self._to_float(qty)
-                taxes = 0
+                taxes = 0.0
 
                 if op == "dividend":
                     ppu = self._to_float(net) / qty
                     # There is no fees, it's just the change, so use the net
                     # amount to get it
-                    fees = 0
+                    fees = 0.0
                 elif op == "taxes":
                     # FIXME(jd) should be sell/buy since it's TTF and included
                     # in the previous transaction
                     taxes = self._to_float(fees)
-                    fees = 0
-                    ppu = 0
+                    ppu = 0.0
+                    fees = 0.0
                 else:
                     if currency != "EUR":
-                        ppu = abs(self._to_float(net)) / qty
                         # Fees is change + fees…
-                        fees = 0
+                        ppu = abs(self._to_float(net)) / qty
+                        fees = 0.0
                     else:
                         ppu = self._to_float(ppu)
                         fees = self._to_float(fees)
 
-                txs.append({
-                    "instrument": self._get_instrument_info(inst),
-                    "operation": op,
-                    "date": datetime.datetime.strptime(
+                txs.append(portfolio.Operation(
+                    instrument=self._get_instrument_info(inst),
+                    type=op,
+                    date=datetime.datetime.strptime(
                         date, "%d/%m/%Y").date(),
-                    "quantity": qty,
-                    "price": ppu,
-                    "fees": fees,
-                    "taxes": taxes,
+                    quantity=qty,
+                    price=ppu,
+                    fees=fees,
+                    taxes=taxes,
                     # Currency is always EUR anyway
-                    "currency": "EUR",
-                })
+                    currency="EUR",
+                ))
 
             end = start - datetime.timedelta(days=1)
             start = end - TWO_YEARS
