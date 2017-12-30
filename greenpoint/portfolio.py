@@ -5,33 +5,7 @@ import enum
 
 import collections
 
-
-class InstrumentType(enum.Enum):
-    ETF = "etf"
-    STOCK = "stock"
-    FUND = "fund"
-
-
-@attr.s(frozen=True)
-class Instrument(object):
-    isin = attr.ib(validator=attr.validators.instance_of(str),
-                   converter=str.upper)
-    type = attr.ib(validator=attr.validators.instance_of(InstrumentType),
-                   cmp=False)
-    name = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)), cmp=False)
-    symbol = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)),
-                     converter=attr.converters.optional(str.upper),
-                     cmp=False)
-    pea = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(bool)), cmp=False)
-    pea_pme = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(bool)), cmp=False)
-    ttf = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(bool)), cmp=False)
-    exchange = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)), cmp=False)
+from greenpoint import instrument
 
 
 class CashOperationType(enum.Enum):
@@ -58,7 +32,8 @@ class OperationType(enum.Enum):
 
 @attr.s(frozen=True)
 class Operation(object):
-    instrument = attr.ib(validator=attr.validators.instance_of(Instrument))
+    instrument = attr.ib(validator=attr.validators.instance_of(
+        instrument.Instrument))
     type = attr.ib(validator=attr.validators.instance_of(OperationType))
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
     quantity = attr.ib(validator=attr.validators.instance_of(float))

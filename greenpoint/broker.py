@@ -8,6 +8,7 @@ from lxml import html
 
 import requests
 
+from greenpoint import instrument
 from greenpoint import portfolio
 from greenpoint import utils
 
@@ -38,9 +39,9 @@ class Fortuneo(object):
         "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23",
         "SANOFI": "FR0000120578",
         "LVMH": "FR0000121014",
-        "OCTO TECHNOLOGY": portfolio.Instrument(
+        "OCTO TECHNOLOGY": instrument.Instrument(
             isin="FR0004157428",
-            type=portfolio.InstrumentType.STOCK,
+            type=instrument.InstrumentType.STOCK,
             name="Octo Technology",
             pea=True,
             pea_pme=True,
@@ -48,9 +49,9 @@ class Fortuneo(object):
             symbol="ALOCT",
             exchange="Euronext Paris",
         ),
-        "KERLINK DS": portfolio.Instrument(
+        "KERLINK DS": instrument.Instrument(
             isin="FR0013251287",
-            type=portfolio.InstrumentType.STOCK,
+            type=instrument.InstrumentType.STOCK,
             name="Kerlink DS",
             pea=False,
             pea_pme=False,
@@ -124,12 +125,12 @@ class Fortuneo(object):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
     @cachetools.func.ttl_cache(maxsize=4096, ttl=3600 * 24)
-    def _get_instrument_info(self, instrument):
-        LOG.debug("Fetching instrument %s", instrument)
+    def _get_instrument_info(self, name):
+        LOG.debug("Fetching instrument %s", name)
 
-        info = self.INSTRUMENTS.get(instrument)
+        info = self.INSTRUMENTS.get(name)
         if info:
-            LOG.debug("Instrument %s pre-configured", instrument)
+            LOG.debug("Instrument %s pre-configured", name)
             # If it's not a string, return the override
             if not isinstance(info, str):
                 return info
@@ -138,19 +139,19 @@ class Fortuneo(object):
             else:
                 url = self.INSTRUMENT_SEARCH_PAGE % info
         else:
-            url = self.INSTRUMENT_SEARCH_PAGE % instrument
+            url = self.INSTRUMENT_SEARCH_PAGE % name
 
         page = self.session.get(url)
         tree = html.fromstring(page.content)
 
-        instrument_kwargs = {"name": instrument}
+        instrument_kwargs = {"name": name}
 
         if page.url.startswith("https://bourse.fortuneo.fr/actions/"):
             caracts = tree.xpath(
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
             if caracts[1].strip() == "Action":
-                instrument_kwargs['type'] = portfolio.InstrumentType.STOCK
+                instrument_kwargs['type'] = instrument.InstrumentType.STOCK
             else:
                 raise ValueError("Unknown type %s" % caracts[1])
             instrument_kwargs["pea"] = caracts[4].strip() == "oui"
@@ -180,7 +181,7 @@ class Fortuneo(object):
             # isin = caracts[0]
             # exchange = caracts[1]
             if caracts[6].strip() == "ETF":
-                instrument_kwargs['type'] = portfolio.InstrumentType.ETF
+                instrument_kwargs['type'] = instrument.InstrumentType.ETF
             else:
                 raise ValueError("Unknown type %s" % caracts[6])
 
@@ -207,13 +208,13 @@ class Fortuneo(object):
                 )[0].split("-")
             )
             instrument_kwargs['ttf'] = False
-            instrument_kwargs['type'] = portfolio.InstrumentType.FUND
+            instrument_kwargs['type'] = instrument.InstrumentType.FUND
             instrument_kwargs['symbol'] = None
             instrument_kwargs['exchange'] = None
         else:
-            raise RuntimeError("Unable to find info for %s", instrument)
+            raise RuntimeError("Unable to find info for %s", name)
 
-        data = portfolio.Instrument(**instrument_kwargs)
+        data = instrument.Instrument(**instrument_kwargs)
         LOG.debug("Found info %s", data)
         return data
 
