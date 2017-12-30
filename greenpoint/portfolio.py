@@ -1,5 +1,42 @@
 import collections
 import operator
+import voluptuous
+
+
+class _Base(dict):
+    def __init__(self, **kwargs):
+        super(_Base, self).__init__(self.SCHEMA(kwargs))
+
+    def __repr__(self):
+        return "<%s: %s>" % (
+            self.__class__.__name__,
+            " ".join((str(k) + "=" + str(v) for k, v in self.items()))
+        )
+
+
+class Instrument(_Base):
+    SCHEMA = voluptuous.Schema({
+        voluptuous.Required("isin"): voluptuous.And(str, str.upper),
+        "symbol": voluptuous.And(str, str.upper),
+        "pea": bool,
+        "pea_pme": bool,
+        "ttf": bool,
+        "exchange": str,
+        "name": str,
+        "type": voluptuous.Any("stock", "etf", "fund"),
+    })
+
+    def __getattr__(self, key):
+        try:
+            return self[key]
+        except KeyError:
+            raise AttributeError(key)
+
+    def __hash__(self):
+        return hash(self.isin)
+
+    def __eq__(self, other):
+        return isinstance(other, Instrument) and self.isin == other.isin
 
 
 def _default_instrument():
@@ -30,8 +67,7 @@ def get_portfolio(txs, date=None):
             currencies[tx['currency']] += tx['amount']
             continue
 
-        key = tuple(sorted(tx["instrument"].items(),
-                           key=operator.itemgetter(0)))
+        key = tx["instrument"]
         instrument = instruments[key]
         taxes = tx.get("taxes", 0)
         fees = tx.get("fees", 0)

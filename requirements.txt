@@ -1,9 +1,9 @@
 requests
 lxml
 yaml
-sqlalchemy
 click
 daiquiri
 cachetools
 iso8601
 python-dateutil
+voluptuous

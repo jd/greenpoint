@@ -5,6 +5,7 @@ import daiquiri
 from lxml import html
 import requests
 
+from greenpoint import portfolio
 from greenpoint import utils
 
 
@@ -26,31 +27,32 @@ class Fortuneo(object):
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
+        "AUBAY": "https://bourse.fortuneo.fr/actions/cours-aubay-AUB-FR0000063737-23",
         "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23",
         "AMUNDI ETF S&P 500 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-s-p-500-ucits-etf-500-FR0010892224-23",
         "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23",
         "SANOFI": "FR0000120578",
         "LVMH": "FR0000121014",
-        "OCTO TECHNOLOGY": {
-            "isin": "FR0004157428",
-            "type": "stock",
-            "name": "Octo Technology",
-            "pea": True,
-            "pea_pme": True,
-            "ttf": False,
-            "symbol": "ALOCT",
-            "exchange": "Euronext Paris",
-        },
-        "KERLINK DS": {
-            "isin": "FR0013251287",
-            "type": "stock",
-            "name": "Kerlink DS",
-            "pea": False,
-            "pea_pme": False,
-            "ttf": False,
-            "symbol": "KLKDS",
-            "exchange": "Euronext Paris",
-        },
+        "OCTO TECHNOLOGY": portfolio.Instrument(
+            isin="FR0004157428",
+            type="stock",
+            name="Octo Technology",
+            pea=True,
+            pea_pme=True,
+            ttf=False,
+            symbol="ALOCT",
+            exchange="Euronext Paris",
+        ),
+        "KERLINK DS": portfolio.Instrument(
+            isin="FR0013251287",
+            type="stock",
+            name="Kerlink DS",
+            pea=False,
+            pea_pme=False,
+            ttf=False,
+            symbol="KLKDS",
+            exchange="Euronext Paris",
+        ),
         "ILIAD": "FR0004035913",
         "DIRECT ENERGIE": "FR0004191674",
         "ROYAL DUTCH SHELLB": "FTN000046GB00B03MM408",
@@ -117,6 +119,8 @@ class Fortuneo(object):
         page = self.session.get(url)
         tree = html.fromstring(page.content)
 
+        instrument_kwargs = {"name": instrument}
+
         if page.url.startswith("https://bourse.fortuneo.fr/actions/"):
             caracts = tree.xpath(
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
@@ -125,10 +129,13 @@ class Fortuneo(object):
                 type = "stock"
             else:
                 raise ValueError("Unknown type %s" % caracts[1])
-            pea = caracts[4].strip() == "oui"
-            pea_pme = caracts[5].strip() == "oui"
-            ttf = caracts[6].strip() == "oui"
-            symbol, isin, exchange = map(
+            instrument_kwargs["pea"] = caracts[4].strip() == "oui"
+            instrument_kwargs["pea_pme"] = caracts[5].strip() == "oui"
+            instrument_kwargs["ttf"] = caracts[6].strip() == "oui"
+
+            (instrument_kwargs['symbol'],
+             instrument_kwargs['isin'],
+             instrument_kwargs['exchange']) = map(
                 lambda x: x.strip(),
                 tree.xpath(
                     '//p[@class="digest-header-name-details"]/text()'
@@ -139,7 +146,9 @@ class Fortuneo(object):
             caracts = tree.xpath(
                 '//table[@class="caracteristics-values"][1]/tr/td/span/text()'
             )
-            pea, pea_pme, ttf = map(
+            (instrument_kwargs['pea'],
+             instrument_kwargs['pea_pme'],
+             instrument_kwargs['ttf']) = map(
                 lambda x: x.strip().lower() == "oui",
                 caracts[8].split("/")
             )
@@ -147,11 +156,13 @@ class Fortuneo(object):
             # isin = caracts[0]
             # exchange = caracts[1]
             if caracts[6].strip() == "ETF":
-                type = "ETF"
+                instrument_kwargs['type'] = "etf"
             else:
                 raise ValueError("Unknown type %s" % caracts[6])
 
-            symbol, isin, exchange = map(
+            (instrument_kwargs['symbol'],
+             instrument_kwargs['isin'],
+             instrument_kwargs['exchange']) = map(
                 lambda x: x.strip(),
                 tree.xpath(
                     '//p[@class="digest-header-name-details"]/text()'
@@ -162,33 +173,23 @@ class Fortuneo(object):
             cols = tree.xpath(
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
-            pea, pea_pme, fortuneo_vie = (cols[10].strip() == "oui",
-                                          cols[11].strip() == "oui",
-                                          cols[12].strip() == "oui")
-            isin, _ = map(
+            (instrument_kwargs['pea'],
+             instrument_kwargs['pea_pme'],
+             fortuneo_vie) = (cols[10].strip() == "oui",
+                              cols[11].strip() == "oui",
+                              cols[12].strip() == "oui")
+            instrument_kwargs['isin'], _ = map(
                 lambda x: x.strip(),
                 tree.xpath(
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-            exchange = None
-            ttf = False
-            symbol = None
-            type = "fund"
+            instrument_kwargs['ttf'] = False
+            instrument_kwargs['type'] = "fund"
         else:
-            LOG.error("Unable to find info for %s", instrument)
-            return {"name": instrument}
+            raise RuntimeError("Unable to find info for %s", instrument)
 
-        data = {
-            "type": type,
-            "name": instrument,
-            "pea": pea,
-            "pea_pme": pea_pme,
-            "ttf": ttf,
-            "symbol": symbol,
-            "isin": isin,
-            "exchange": exchange,
-        }
+        data = portfolio.Instrument(**instrument_kwargs)
         LOG.debug("Found info %s", data)
         return data
 

@@ -55,7 +55,7 @@ def portfolio(broker, date=None):
 
     import pprint
     for k, v in instruments.items():
-        print(dict(k)['name'])
+        print(k.name)
         pprint.pprint(v)
     pprint.pprint(currencies)
 
