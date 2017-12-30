@@ -1,42 +1,35 @@
+import attr
+import enum
+
 import collections
 
-import voluptuous
+
+class InstrumentType(enum.Enum):
+    ETF = "etf"
+    STOCK = "stock"
+    FUND = "fund"
 
 
-class _Base(dict):
-    def __init__(self, **kwargs):
-        super(_Base, self).__init__(self.SCHEMA(kwargs))
-
-    def __repr__(self):
-        return "<%s: %s>" % (
-            self.__class__.__name__,
-            " ".join((str(k) + "=" + str(v) for k, v in self.items()))
-        )
-
-
-class Instrument(_Base):
-    SCHEMA = voluptuous.Schema({
-        voluptuous.Required("isin"): voluptuous.And(str, str.upper),
-        "symbol": voluptuous.And(str, str.upper),
-        "pea": bool,
-        "pea_pme": bool,
-        "ttf": bool,
-        "exchange": str,
-        "name": str,
-        voluptuous.Required("type"): voluptuous.Any("stock", "etf", "fund"),
-    })
-
-    def __getattr__(self, key):
-        try:
-            return self[key]
-        except KeyError:
-            raise AttributeError(key)
-
-    def __hash__(self):
-        return hash(self.isin)
-
-    def __eq__(self, other):
-        return isinstance(other, Instrument) and self.isin == other.isin
+@attr.s(frozen=True)
+class Instrument(object):
+    isin = attr.ib(validator=attr.validators.instance_of(str),
+                   converter=str.upper)
+    type = attr.ib(validator=attr.validators.instance_of(InstrumentType),
+                   cmp=False)
+    name = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)), cmp=False)
+    symbol = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)),
+                     converter=attr.converters.optional(str.upper),
+                     cmp=False)
+    pea = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(bool)), cmp=False)
+    pea_pme = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(bool)), cmp=False)
+    ttf = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(bool)), cmp=False)
+    exchange = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)), cmp=False)
 
 
 def _default_instrument():

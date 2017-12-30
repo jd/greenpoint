@@ -29,6 +29,8 @@ class Fortuneo(object):
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
+        "KERLINK": "https://bourse.fortuneo.fr/actions/cours-kerlink-ALKLK-FR0013156007-23",
+        "BASTIDE LE CONFORT": "https://bourse.fortuneo.fr/actions/cours-bastide-le-confort-BLC-FR0000035370-23",
         "LYXOR UCITS ETF Eastern Europe (CECE NTR EUR)": "https://bourse.fortuneo.fr/trackers/cours-lyxor-ucits-etf-eastern-europe-cece-ntr-eur-CEC-FR0010204073-23",
         "AUBAY": "https://bourse.fortuneo.fr/actions/cours-aubay-AUB-FR0000063737-23",
         "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23",
@@ -38,7 +40,7 @@ class Fortuneo(object):
         "LVMH": "FR0000121014",
         "OCTO TECHNOLOGY": portfolio.Instrument(
             isin="FR0004157428",
-            type="stock",
+            type=portfolio.InstrumentType.STOCK,
             name="Octo Technology",
             pea=True,
             pea_pme=True,
@@ -48,7 +50,7 @@ class Fortuneo(object):
         ),
         "KERLINK DS": portfolio.Instrument(
             isin="FR0013251287",
-            type="stock",
+            type=portfolio.InstrumentType.STOCK,
             name="Kerlink DS",
             pea=False,
             pea_pme=False,
@@ -148,7 +150,7 @@ class Fortuneo(object):
                 '//table[@class="caracteristics-values"]/tr/td/span/text()'
             )
             if caracts[1].strip() == "Action":
-                instrument_kwargs['type'] = "stock"
+                instrument_kwargs['type'] = portfolio.InstrumentType.STOCK
             else:
                 raise ValueError("Unknown type %s" % caracts[1])
             instrument_kwargs["pea"] = caracts[4].strip() == "oui"
@@ -178,7 +180,7 @@ class Fortuneo(object):
             # isin = caracts[0]
             # exchange = caracts[1]
             if caracts[6].strip() == "ETF":
-                instrument_kwargs['type'] = "etf"
+                instrument_kwargs['type'] = portfolio.InstrumentType.ETF
             else:
                 raise ValueError("Unknown type %s" % caracts[6])
 
@@ -205,7 +207,9 @@ class Fortuneo(object):
                 )[0].split("-")
             )
             instrument_kwargs['ttf'] = False
-            instrument_kwargs['type'] = "fund"
+            instrument_kwargs['type'] = portfolio.InstrumentType.FUND
+            instrument_kwargs['symbol'] = None
+            instrument_kwargs['exchange'] = None
         else:
             raise RuntimeError("Unable to find info for %s", instrument)
 

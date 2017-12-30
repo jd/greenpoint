@@ -6,4 +6,4 @@ daiquiri
 cachetools
 iso8601
 python-dateutil
-voluptuous
+attrs
