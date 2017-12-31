@@ -25,6 +25,15 @@ def test_quotes_from_lesechos():
                             high=17.69,
                             low=16.25,
                             volume=252461) in quotes
+    inst = instrument.Instrument(
+        isin="FR0011665281",
+        type=instrument.InstrumentType.STOCK,
+        name="Invalid",
+        symbol="FGAXX",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quotes = inst.get_quotes_from_lesechos()
+    assert list(quotes) == []
 
 
 def test_quotes_from_boursorama():
@@ -42,6 +51,15 @@ def test_quotes_from_boursorama():
                             high=17.69,
                             low=16.25,
                             volume=179707) in quotes
+    inst = instrument.Instrument(
+        isin="FR0011665281",
+        type=instrument.InstrumentType.STOCK,
+        name="Invalid",
+        symbol="FGAXX",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quotes = inst.get_quotes_from_boursorama()
+    assert list(quotes) == []
 
 
 def test_quotes_from_google():
@@ -59,3 +77,12 @@ def test_quotes_from_google():
                             high=17.69,
                             low=16.25,
                             volume=179707) in quotes
+    inst = instrument.Instrument(
+        isin="FR0011665281",
+        type=instrument.InstrumentType.STOCK,
+        name="Invalid",
+        symbol="FGAXX",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quotes = inst.get_quotes_from_google()
+    assert list(quotes) == []

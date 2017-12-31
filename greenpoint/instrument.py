@@ -133,7 +133,7 @@ class Instrument(object):
         try:
             symbol = r.url.split("symbole=")[1]
         except IndexError:
-            raise ValueError("Unable to find quote for %s" % self.isin)
+            return
 
         r = requests.get(
             "http://www.boursorama.com/graphiques/quotes.phtml?s%5B0%5D=" +
