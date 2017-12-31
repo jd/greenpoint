@@ -223,3 +223,16 @@ class Instrument(object):
                     close=values[3],
                     volume=int(values[4]),
                 )
+
+    QUOTES_PROVIDERS = {
+        "boursorama": get_quotes_from_boursorama,
+        "lesechos": get_quotes_from_lesechos,
+        "google": get_quotes_from_google,
+    }
+
+    def get_quotes(self):
+        quotes_by_date = {}
+        for func in self.QUOTES_PROVIDERS.values():
+            for quote in func(self):
+                quotes_by_date[quote.date] = quote
+        return quotes_by_date.values()
