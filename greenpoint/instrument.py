@@ -1,6 +1,7 @@
 import csv
 import datetime
 import os.path
+import re
 
 import attr
 
@@ -46,6 +47,25 @@ class Exchange(object):
         attr.validators.instance_of(str)), cmp=False)
     comments = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(str)), cmp=False)
+
+    # Source: https://www.google.com/googlefinance/disclaimer/
+    GOOGLE_MIC_MAP = {
+        "XPAR": "EPA",
+        "XBRU": "EBR",
+        "XAMS": "AMS",
+        "XLON": "LON",
+        "XTSE": "CVE",
+        "XNAS": "NASDAQ",
+        "XNYS": "NYSE",
+        "ARCX": "NYSEARCA",
+    }
+
+    @property
+    def google_code(self):
+        try:
+            return self.GOOGLE_MIC_MAP[self.mic]
+        except IndexError:
+            return None
 
 
 def list_exchanges():
@@ -160,3 +180,46 @@ class Instrument(object):
                 low=float(history.get("lowPx")),
                 volume=int(float(history.get("qty"))),
             )
+
+    _GOOGLE_FINANCE_RE = re.compile("<td class=\"lm\">(.+ \d+, \d+)\n"
+                                    "<td class=\"rgt\">(.+)\n"
+                                    "<td class=\"rgt\">(.+)\n"
+                                    "<td class=\"rgt\">(.+)\n"
+                                    "<td class=\"rgt\">(.+)\n"
+                                    "<td class=\"rgt rm\">(.+)\n")
+
+    def get_quotes_from_google(self):
+        google_code = self.exchange.google_code
+        if google_code is None:
+            return
+
+        r = requests.get(
+            "https://finance.google.com/finance/historical?q=%s:%s&num=200"
+            % (google_code, self.symbol))
+
+        # <td class="lm">Apr 21, 2017
+        # <td class="rgt">58.40
+        # <td class="rgt">59.90
+        # <td class="rgt">58.40
+        # <td class="rgt">59.90
+        # <td class="rgt rm">2,918
+
+        for found in self._GOOGLE_FINANCE_RE.finditer(r.text):
+            date = datetime.datetime.strptime(
+                found.group(1), "%b %d, %Y").date()
+            values = []
+            for idx in range(2, 7):
+                v = found.group(idx)
+                if v == "-":
+                    break
+                v = float(v.replace(",", ""))
+                values.append(v)
+            else:
+                yield Quote(
+                    date=date,
+                    open=values[0],
+                    high=values[1],
+                    low=values[2],
+                    close=values[3],
+                    volume=int(values[4]),
+                )
