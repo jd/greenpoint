@@ -30,6 +30,7 @@ class Fortuneo(object):
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
+        "ROYAL DUTCH SHELLB": "https://bourse.fortuneo.fr/actions/cours-royal-dutch-shellb-RDSB-GB00B03MM408-46",
         "KERLINK": "https://bourse.fortuneo.fr/actions/cours-kerlink-ALKLK-FR0013156007-23",
         "BASTIDE LE CONFORT": "https://bourse.fortuneo.fr/actions/cours-bastide-le-confort-BLC-FR0000035370-23",
         "LYXOR UCITS ETF Eastern Europe (CECE NTR EUR)": "https://bourse.fortuneo.fr/trackers/cours-lyxor-ucits-etf-eastern-europe-cece-ntr-eur-CEC-FR0010204073-23",
@@ -47,7 +48,7 @@ class Fortuneo(object):
             pea_pme=True,
             ttf=False,
             symbol="ALOCT",
-            exchange="Euronext Paris",
+            exchange=instrument.get_exchange_by_mic("XPAR"),
         ),
         "KERLINK DS": instrument.Instrument(
             isin="FR0013251287",
@@ -57,7 +58,7 @@ class Fortuneo(object):
             pea_pme=False,
             ttf=False,
             symbol="KLKDS",
-            exchange="Euronext Paris",
+            exchange=instrument.get_exchange_by_mic("XPAR"),
         ),
         "ILIAD": "FR0004035913",
         "DIRECT ENERGIE": "FR0004191674",
@@ -160,11 +161,14 @@ class Fortuneo(object):
 
             (instrument_kwargs['symbol'],
              instrument_kwargs['isin'],
-             instrument_kwargs['exchange']) = map(
+             exchange) = map(
                 lambda x: x.strip(),
                 tree.xpath(
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
+            )
+            instrument_kwargs['exchange'] = instrument.get_exchange_by_name(
+                exchange
             )
         elif page.url.startswith("https://bourse.fortuneo.fr/trackers/"):
             # ETF
@@ -187,11 +191,14 @@ class Fortuneo(object):
 
             (instrument_kwargs['symbol'],
              instrument_kwargs['isin'],
-             instrument_kwargs['exchange']) = map(
+             exchange) = map(
                 lambda x: x.strip(),
                 tree.xpath(
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
+            )
+            instrument_kwargs['exchange'] = instrument.get_exchange_by_name(
+                exchange
             )
         elif page.url.startswith("https://bourse.fortuneo.fr/sicav-fonds/"):
             # Mutual funds
@@ -212,7 +219,7 @@ class Fortuneo(object):
             instrument_kwargs['symbol'] = None
             instrument_kwargs['exchange'] = None
         else:
-            raise RuntimeError("Unable to find info for %s", name)
+            raise ValueError("Unable to find info for %s", name)
 
         data = instrument.Instrument(**instrument_kwargs)
         LOG.debug("Found info %s", data)
@@ -326,8 +333,14 @@ class Fortuneo(object):
                         ppu = self._to_float(ppu)
                         fees = self._to_float(fees)
 
+                try:
+                    inst = self._get_instrument_info(inst)
+                except ValueError:
+                    LOG.warning("Ignoring unknown instrument `%s'", inst)
+                    continue
+
                 txs.append(portfolio.Operation(
-                    instrument=self._get_instrument_info(inst),
+                    instrument=inst,
                     type=op,
                     date=datetime.datetime.strptime(
                         date, "%d/%m/%Y").date(),

@@ -1,8 +1,14 @@
+import csv
+import datetime
+import os.path
+
 import attr
 
 import enum
 
-import datetime
+import leven
+
+import orderedset
 
 import requests
 
@@ -10,7 +16,7 @@ import requests
 @attr.s(slots=True, frozen=True)
 class Quote(object):
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
-    open = attr.ib(validator=attr.validators.instance_of(float))
+    open = attr.ib(validator=attr.validators.instance_of(float))  # noqa
     close = attr.ib(validator=attr.validators.instance_of(float))
     high = attr.ib(validator=attr.validators.instance_of(float))
     low = attr.ib(validator=attr.validators.instance_of(float))
@@ -24,17 +30,72 @@ class InstrumentType(enum.Enum):
 
 
 @attr.s(frozen=True)
+class Exchange(object):
+    mic = attr.ib(validator=attr.validators.instance_of(str),
+                  converter=str.upper)
+    operating_mic = attr.ib(validator=attr.validators.instance_of(str),
+                            converter=str.upper,
+                            cmp=False)
+    name = attr.ib(validator=attr.validators.instance_of(str), cmp=False)
+    country = attr.ib(validator=attr.validators.instance_of(str), cmp=False)
+    country_code = attr.ib(validator=attr.validators.instance_of(str),
+                           cmp=False)
+    city = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)), cmp=False)
+    comments = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)), cmp=False)
+
+
+def list_exchanges():
+    with open(
+            os.path.join(
+                os.path.dirname(__file__), "data/ISO10383_MIC.csv"),
+            "r", encoding="latin-1") as f:
+        for row in csv.DictReader(f):
+            yield Exchange(
+                mic=row['MIC'],
+                operating_mic=row['OPERATING MIC'],
+                name=row['NAME-INSTITUTION DESCRIPTION'],
+                country=row['COUNTRY'],
+                country_code=row['ISO COUNTRY CODE (ISO 3166)'],
+                city=row['CITY'],
+                comments=row['COMMENTS'])
+
+
+Exchanges = list(list_exchanges())
+ExchangesMICMap = {e.mic: e for e in Exchanges}
+
+
+def get_exchange_by_mic(mic):
+    return ExchangesMICMap[mic]
+
+
+def _leven_ex(target, ex_name):
+    return leven.levenshtein(
+        target,
+        " ".join(orderedset.OrderedSet(ex_name.split(" "))))
+
+
+def get_exchange_by_name(name):
+    lower = name.lower()
+    return list(sorted(
+        Exchanges,
+        key=lambda ex: _leven_ex(lower, ex.name.lower())))[0]
+
+
+@attr.s(frozen=True)
 class Instrument(object):
     isin = attr.ib(validator=attr.validators.instance_of(str),
                    converter=str.upper)
-    type = attr.ib(validator=attr.validators.instance_of(InstrumentType),
+    type = attr.ib(validator=attr.validators.instance_of(InstrumentType),  # noqa
                    cmp=False)
     name = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(str)), cmp=False)
-    symbol = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)),
-                     converter=attr.converters.optional(str.upper),
-                     cmp=False)
+    symbol = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(str)),
+        converter=attr.converters.optional(str.upper),
+        cmp=False)
     pea = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(bool)), cmp=False)
     pea_pme = attr.ib(validator=attr.validators.optional(
@@ -42,7 +103,7 @@ class Instrument(object):
     ttf = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(bool)), cmp=False)
     exchange = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)), cmp=False)
+        attr.validators.instance_of(Exchange)), cmp=False)
 
     def get_quotes_from_boursorama(self):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
