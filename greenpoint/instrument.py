@@ -8,6 +8,8 @@ import enum
 
 import leven
 
+from lxml import etree
+
 import orderedset
 
 import requests
@@ -136,4 +138,25 @@ class Instrument(object):
                 high=float(point['h']),
                 low=float(point['l']),
                 volume=point['v']
+            )
+
+    def get_quotes_from_lesechos(self):
+        end = datetime.datetime.now().date().strftime("%Y%m%d")
+        r = requests.get("https://lesechos-bourse-fo-cdn.wlb.aw.atos.net" +
+                         "/FDS/history.xml?entity=echos&view=ALL" +
+                         "&code=" + self.isin +
+                         "&codification=ISIN&adjusted=true&base100=false" +
+                         "&exchange=" + self.exchange.operating_mic +
+                         "&sessWithNoQuot=false&beginDate=19000101&endDate=" +
+                         end + "&computeVar=true")
+        xml = etree.fromstring(r.content)
+        for history in xml.xpath("//historyResponse/history/historyDt"):
+            yield Quote(
+                date=datetime.datetime.strptime(
+                    history.get("dt"), "%Y%m%d").date(),
+                open=float(history.get("openPx")),
+                close=float(history.get("closePx")),
+                high=float(history.get("highPx")),
+                low=float(history.get("lowPx")),
+                volume=int(float(history.get("qty"))),
             )
