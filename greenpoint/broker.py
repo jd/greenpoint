@@ -120,7 +120,11 @@ class Fortuneo(object):
             return portfolio.OperationType.DIVIDEND
         elif op.startswith("taxe transac"):
             return portfolio.OperationType.TAX
-        raise ValueError("Unknown transaction type")
+        elif (op.startswith("ost de création de coupons") or
+              op.startswith("annul. ost de création de coupons") or
+              op.startswith("conversion forme de titre")):
+            return
+        LOG.error("Unknown transaction type `%s'", operation)
 
     @staticmethod
     def _to_float(s):
@@ -305,10 +309,9 @@ class Fortuneo(object):
             for inst, op, xchange, date, qty, ppu, raw, fees, net, currency in map(  # noqa
                     lambda t: tuple(map(lambda x: x.strip(), t)),
                     utils.grouper(history, 10)):
-                try:
-                    op = self._translate_op(op)
-                except ValueError:
-                    LOG.warning("Ignoring unknown tranaction type: %s", op)
+
+                op = self._translate_op(op)
+                if op is None:
                     continue
 
                 qty = self._to_float(qty)
