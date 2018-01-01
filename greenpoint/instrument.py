@@ -95,6 +95,8 @@ def get_exchange_by_mic(mic):
 
 
 def _leven_ex(target, ex_name):
+    if target in ex_name:
+        return -1
     return leven.levenshtein(
         target,
         " ".join(orderedset.OrderedSet(ex_name.split(" "))))

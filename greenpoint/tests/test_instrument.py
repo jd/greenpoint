@@ -8,6 +8,8 @@ def test_get_by_name():
     assert ex.mic == "XPAR"
     ex = instrument.get_exchange_by_name("Euronext Bruxelles")
     assert ex.mic == "XBRU"
+    ex = instrument.get_exchange_by_name("NEW YORK STOCK EXCHANGE")
+    assert ex.mic == "XNYS"
 
 
 def test_quotes_from_lesechos():
