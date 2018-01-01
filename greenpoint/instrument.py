@@ -130,7 +130,7 @@ class Instrument(object):
         attr.validators.instance_of(bool)), cmp=False)
     exchange = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(Exchange)), cmp=False)
-    _quotes = attr.ib(init=False, default=None)
+    _quotes = attr.ib(init=False, default=None, cmp=False)
 
     def fetch_quotes_from_boursorama(self):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +

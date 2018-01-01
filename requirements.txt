@@ -9,3 +9,4 @@ python-dateutil
 attrs
 leven
 orderedset
+tabulate

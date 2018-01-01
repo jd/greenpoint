@@ -1,4 +1,6 @@
 import datetime
+import itertools
+import operator
 
 import attr
 import enum
@@ -50,70 +52,145 @@ class Operation(object):
 
 
 @attr.s
+class PortfolioInstrument(object):
+    txs = attr.ib(validator=attr.validators.instance_of(list))
+    currency = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(str)),
+                       converter=attr.converters.optional(str.upper),
+                       init=False)
+    instrument = attr.ib(
+        validator=attr.validators.instance_of(
+            instrument.Instrument),
+        init=False)
+    quantity = attr.ib(validator=attr.validators.instance_of(float),
+                       init=False,
+                       default=0.0)
+    price = attr.ib(validator=attr.validators.instance_of(float),
+                    init=False,
+                    default=0.0)
+    taxes = attr.ib(validator=attr.validators.instance_of(float),
+                    init=False,
+                    default=0.0)
+    dividend = attr.ib(validator=attr.validators.instance_of(float),
+                       init=False,
+                       default=0.0)
+    fees = attr.ib(validator=attr.validators.instance_of(float),
+                   init=False,
+                   default=0.0)
+    gain = attr.ib(validator=attr.validators.instance_of(float),
+                   init=False,
+                   default=0.0)
+    bought = attr.ib(validator=attr.validators.instance_of(float),
+                     init=False,
+                     default=0.0)
+    sold = attr.ib(validator=attr.validators.instance_of(float),
+                   init=False,
+                   default=0.0)
+    operations_count = attr.ib(
+        validator=attr.validators.instance_of(dict),
+        init=False,
+        default=attr.Factory(lambda: collections.defaultdict(lambda: 0))
+    )
+    average_price_bought = attr.ib(
+        validator=attr.validators.instance_of(float),
+        init=False,
+        default=0.0
+    )
+    average_price_sold = attr.ib(
+        validator=attr.validators.instance_of(float),
+        init=False,
+        default=0.0,
+    )
+    date_first = attr.ib(validator=attr.validators.instance_of(datetime.date),
+                         init=False)
+    date_last = attr.ib(validator=attr.validators.instance_of(datetime.date),
+                        init=False)
+
+    @txs.validator
+    def txs_validator(self, attribute, value):
+        if not value:
+            raise ValueError("At least one transaction is needed")
+        instruments = [tx.instrument for tx in self.txs]
+        instrument = instruments[0]
+        if not all(instrument == inst for inst in instruments):
+            raise ValueError(
+                "Transactions are not all for the same instrument")
+
+        currencies = [tx.currency for tx in self.txs]
+        currency = currencies[0]
+        if not all(currency == c for c in currencies):
+            raise ValueError(
+                "Transactions are not all in the same currency")
+
+        self.currency = currency
+        self.instrument = instrument
+
+    def __attrs_post_init__(self):
+        self.date_first = self.txs[0].date
+        self.date_last = self.txs[0].date
+
+        for tx in self.txs:
+            self.date_first = min(self.date_first, tx.date)
+            self.date_last = max(self.date_last, tx.date)
+            self.fees += tx.fees
+            self.taxes += tx.taxes
+            self.operations_count[tx.type] += 1
+            if tx.type == OperationType.BUY:
+                total = self.quantity + tx.quantity
+                if total != 0:
+                    self.price = (self.price * self.quantity + tx.amount) / total
+                    self.average_price_bought = (
+                        self.average_price_bought * self.bought + tx.amount
+                    ) / total
+                self.quantity = total
+                self.bought += tx.quantity
+            elif tx.type == OperationType.SELL:
+                self.quantity -= tx.quantity
+                self.gain += (tx.price - self.price) * tx.quantity
+                total = tx.quantity + self.sold
+                if total != 0:
+                    self.average_price_sold = (
+                        (self.average_price_sold * self.sold) + tx.amount
+                    ) / total
+                self.sold += tx.quantity
+            elif tx.type == OperationType.DIVIDEND:
+                self.dividend += tx.amount
+
+
+ATTRGETTER_INSTRUMENT = operator.attrgetter('instrument')
+
+
+def _get_class_name(o):
+    return type(o).__name__
+
+
+@attr.s(frozen=True)
 class Portfolio(object):
 
     txs = attr.ib(validator=attr.validators.instance_of(
         list))
 
-    @staticmethod
-    def _default_instrument():
-        return {
-            "price": 0,
-            "quantity": 0,
-            "dividend": 0,
-            "taxes": 0,
-            "fees": 0,
-            "gain": 0,
-            "trades": 0,
-            "bought": 0,
-            "sold": 0,
-            "average_price_bought": 0,
-            "average_price_sold": 0,
-        }
-
     def get_portfolio(self, date=None):
-        instruments = collections.defaultdict(self._default_instrument)
+        instruments = []
         currencies = collections.defaultdict(lambda: 0)
 
-        for tx in self.txs:
-            if date is not None and tx.date > date:
-                continue
+        for type_, txs in itertools.groupby(
+                sorted(self.txs, key=_get_class_name),
+                key=_get_class_name):
 
-            if isinstance(tx, CashOperation):
-                currencies[tx.currency] += tx.amount
-                continue
+            if type_ == 'CashOperation':
+                for tx in txs:
+                    if date is None or tx.date <= date:
+                        currencies[tx.currency] += tx.amount
 
-            instrument = instruments[tx.instrument]
-            instrument["fees"] += tx.fees
-            instrument["taxes"] += tx.taxes
-            if tx.type == OperationType.BUY:
-                total = (instrument["quantity"] + tx.quantity)
-                if total != 0:
-                    instrument["price"] = (
-                        instrument["price"] * instrument["quantity"] +
-                        tx.amount
-                    ) / total
-                    instrument["average_price_bought"] = (
-                        (instrument["average_price_bought"] *
-                         instrument["bought"]) +
-                        tx.amount
-                    ) / total
-                instrument["quantity"] = total
-                instrument["trades"] += 1
-                instrument["bought"] += tx.quantity
-            elif tx.type == OperationType.SELL:
-                instrument["quantity"] -= tx.quantity
-                instrument["trades"] += 1
-                instrument["gain"] += ((tx.price - instrument["price"]) *
-                                       tx.quantity)
-                total = tx.quantity + instrument["sold"]
-                if total != 0:
-                    instrument["average_price_sold"] = (
-                        (instrument["average_price_sold"] * instrument["sold"]) +
-                        tx.amount
-                    ) / total
-                instrument["sold"] += tx.quantity
-            elif tx.type == OperationType.DIVIDEND:
-                instrument["dividend"] += tx.amount
+            elif type_ == 'Operation':
+                for _, gtxs in itertools.groupby(
+                        sorted((tx for tx in txs
+                                if date is None or tx.date <= date),
+                               key=ATTRGETTER_INSTRUMENT),
+                        key=ATTRGETTER_INSTRUMENT):
+                    instruments.append(PortfolioInstrument(list(gtxs)))
+            else:
+                raise Exception(type_, type_ == CashOperation)
 
         return instruments, currencies

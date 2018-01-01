@@ -4,6 +4,8 @@ import click
 
 import daiquiri
 
+import tabulate
+
 from greenpoint import broker
 from greenpoint import config
 from greenpoint import portfolio as gportfolio
@@ -70,11 +72,27 @@ def portfolio(broker, date=None):
     pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
     instruments, currencies = pfl.get_portfolio(date)
 
-    import pprint
-    for k, v in instruments.items():
-        print(k.name)
-        pprint.pprint(v)
-    pprint.pprint(currencies)
+    print(tabulate.tabulate(
+        [
+            [
+                pi.instrument.name[:29], pi.quantity,
+                pi.price, pi.taxes, pi.dividend, pi.fees,
+                pi.gain, pi.bought, pi.sold,
+                pi.average_price_bought, pi.average_price_sold,
+                pi.currency,
+                pi.date_first, pi.date_last
+            ] for pi in instruments
+        ],
+        headers=["Instrument", "Qty", "Price", "Taxes", "Div.", "Fees",
+                 "Gain", "Bought", "Sold", "Avg P. Bought", "Avg P. Sold",
+                 "Curr.",
+                 "First", "Last"],
+        tablefmt='fancy_grid', floatfmt=".2f"),
+    )
+
+    print(tabulate.tabulate([[k, v] for k, v in currencies.items()],
+                             headers=["Currency", "Amount"],
+                            tablefmt='fancy_grid', floatfmt=".2f"))
 
 
 if __name__ == '__main__':
