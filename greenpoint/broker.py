@@ -30,6 +30,7 @@ class Fortuneo(object):
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     INSTRUMENTS = {
+        "CLARANOVA": "https://bourse.fortuneo.fr/actions/cours-claranova-CLA-FR0004026714-23",
         "AMUNDI ETF STOXX EUROPE 600 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-stoxx-europe-600-ucits-etf-C6E-FR0010791004-23",
         "ROYAL DUTCH SHELLB": "https://bourse.fortuneo.fr/actions/cours-royal-dutch-shellb-RDSB-GB00B03MM408-46",
         "KERLINK": "https://bourse.fortuneo.fr/actions/cours-kerlink-ALKLK-FR0013156007-23",
