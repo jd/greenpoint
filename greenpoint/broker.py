@@ -317,14 +317,12 @@ class Fortuneo(object):
                 qty = self._to_float(qty)
                 taxes = 0.0
 
-                if op == "dividend":
+                if op == portfolio.OperationType.DIVIDEND:
                     ppu = self._to_float(net) / qty
                     # There is no fees, it's just the change, so use the net
                     # amount to get it
                     fees = 0.0
-                elif op == "taxes":
-                    # FIXME(jd) should be sell/buy since it's TTF and included
-                    # in the previous transaction
+                elif op == portfolio.OperationType.TAX:
                     taxes = self._to_float(fees)
                     ppu = 0.0
                     fees = 0.0
