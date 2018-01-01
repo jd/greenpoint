@@ -15,9 +15,9 @@ LOG = daiquiri.getLogger(__name__)
 
 
 @click.group()
-def main():
-    conf = config.get_config()
-    daiquiri.setup(level=logging.DEBUG if conf.get("debug") else logging.INFO)
+@click.option('--debug', is_flag=True)
+def main(debug=False):
+    daiquiri.setup(level=logging.DEBUG if debug else logging.WARNING)
 
 
 @main.command(name="import")
