@@ -18,7 +18,7 @@ def test_quotes_from_lesechos():
         symbol="FGA",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_lesechos()
+    quotes = inst.fetch_quotes_from_lesechos()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -32,7 +32,7 @@ def test_quotes_from_lesechos():
         symbol="FGAXX",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_lesechos()
+    quotes = inst.fetch_quotes_from_lesechos()
     assert list(quotes) == []
 
 
@@ -44,7 +44,7 @@ def test_quotes_from_boursorama():
         symbol="FGA",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_boursorama()
+    quotes = inst.fetch_quotes_from_boursorama()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -58,7 +58,7 @@ def test_quotes_from_boursorama():
         symbol="FGAXX",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_boursorama()
+    quotes = inst.fetch_quotes_from_boursorama()
     assert list(quotes) == []
 
 
@@ -70,7 +70,7 @@ def test_quotes_from_google():
         symbol="FGA",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_google()
+    quotes = inst.fetch_quotes_from_google()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -84,7 +84,7 @@ def test_quotes_from_google():
         symbol="FGAXX",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes_from_google()
+    quotes = inst.fetch_quotes_from_google()
     assert list(quotes) == []
 
 
@@ -96,7 +96,7 @@ def test_quotes():
         symbol="FGA",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes()
+    quotes = inst.fetch_quotes().values()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -110,5 +110,30 @@ def test_quotes():
         symbol="FGAXX",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.get_quotes()
+    quotes = inst.fetch_quotes().values()
+    assert list(quotes) == []
+
+
+def test_quotes_property():
+    inst = instrument.Instrument(
+        isin="FR0011665280",
+        type=instrument.InstrumentType.STOCK,
+        name="Figeac Aero",
+        symbol="FGA",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    assert instrument.Quote(date=datetime.date(2017, 12, 20),
+                            open=16.73,
+                            close=17.69,
+                            high=17.69,
+                            low=16.25,
+                            volume=179707) in inst.quotes.values()
+    inst = instrument.Instrument(
+        isin="FR0011665281",
+        type=instrument.InstrumentType.STOCK,
+        name="Invalid",
+        symbol="FGAXX",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quotes = inst.quotes.values()
     assert list(quotes) == []

@@ -15,6 +15,8 @@ import orderedset
 
 import requests
 
+from greenpoint import storage
+
 
 @attr.s(slots=True, frozen=True)
 class Quote(object):
@@ -105,7 +107,7 @@ def get_exchange_by_name(name):
         key=lambda ex: _leven_ex(lower, ex.name.lower())))[0]
 
 
-@attr.s(frozen=True)
+@attr.s
 class Instrument(object):
     isin = attr.ib(validator=attr.validators.instance_of(str),
                    converter=str.upper)
@@ -126,8 +128,9 @@ class Instrument(object):
         attr.validators.instance_of(bool)), cmp=False)
     exchange = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(Exchange)), cmp=False)
+    _quotes = attr.ib(init=False, default=None)
 
-    def get_quotes_from_boursorama(self):
+    def fetch_quotes_from_boursorama(self):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
                          self.isin)
         try:
@@ -160,7 +163,7 @@ class Instrument(object):
                 volume=point['v']
             )
 
-    def get_quotes_from_lesechos(self):
+    def fetch_quotes_from_lesechos(self):
         end = datetime.datetime.now().date().strftime("%Y%m%d")
         r = requests.get("https://lesechos-bourse-fo-cdn.wlb.aw.atos.net" +
                          "/FDS/history.xml?entity=echos&view=ALL" +
@@ -188,7 +191,7 @@ class Instrument(object):
                                     "<td class=\"rgt\">(.+)\n"
                                     "<td class=\"rgt rm\">(.+)\n")
 
-    def get_quotes_from_google(self):
+    def fetch_quotes_from_google(self):
         google_code = self.exchange.google_code
         if google_code is None:
             return
@@ -225,14 +228,34 @@ class Instrument(object):
                 )
 
     QUOTES_PROVIDERS = {
-        "boursorama": get_quotes_from_boursorama,
-        "lesechos": get_quotes_from_lesechos,
-        "google": get_quotes_from_google,
+        "boursorama": fetch_quotes_from_boursorama,
+        "lesechos": fetch_quotes_from_lesechos,
+        "google": fetch_quotes_from_google,
     }
 
-    def get_quotes(self):
+    def fetch_quotes(self):
+        """Get quotes from all available providers and merge them."""
         quotes_by_date = {}
         for func in self.QUOTES_PROVIDERS.values():
             for quote in func(self):
                 quotes_by_date[quote.date] = quote
-        return quotes_by_date.values()
+        return quotes_by_date
+
+    def save_quotes(self):
+        return storage.save(self.isin + "-quotes", self._quotes)
+
+    def load_quotes(self):
+        try:
+            return storage.load(self.isin + "-quotes")
+        except FileNotFoundError:
+            return {}
+
+    @property
+    def quotes(self):
+        if self._quotes is None:
+            self._quotes = self.load_quotes()
+            today = datetime.datetime.now().date()
+            if not self._quotes or max(self._quotes.keys()) < today:
+                self._quotes = self.fetch_quotes()
+                self.save_quotes()
+        return self._quotes
