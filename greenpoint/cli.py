@@ -64,9 +64,8 @@ def portfolio(broker, date=None):
     if date is not None:
         date = utils.parse_date(date)
 
-    txs = storage.load_transactions(broker)
-
-    instruments, currencies = gportfolio.get_portfolio(txs, date)
+    pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
+    instruments, currencies = pfl.get_portfolio(date)
 
     import pprint
     for k, v in instruments.items():

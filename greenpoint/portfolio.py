@@ -49,65 +49,71 @@ class Operation(object):
         return self.quantity * self.price
 
 
-def _default_instrument():
-    return {
-        "price": 0,
-        "quantity": 0,
-        "dividend": 0,
-        "taxes": 0,
-        "fees": 0,
-        "gain": 0,
-        "trades": 0,
-        "bought": 0,
-        "sold": 0,
-        "average_price_bought": 0,
-        "average_price_sold": 0,
-    }
+@attr.s
+class Portfolio(object):
 
+    txs = attr.ib(validator=attr.validators.instance_of(
+        list))
 
-def get_portfolio(txs, date=None):
-    instruments = collections.defaultdict(_default_instrument)
-    currencies = collections.defaultdict(lambda: 0)
+    @staticmethod
+    def _default_instrument():
+        return {
+            "price": 0,
+            "quantity": 0,
+            "dividend": 0,
+            "taxes": 0,
+            "fees": 0,
+            "gain": 0,
+            "trades": 0,
+            "bought": 0,
+            "sold": 0,
+            "average_price_bought": 0,
+            "average_price_sold": 0,
+        }
 
-    for tx in txs:
-        if date is not None and tx.date > date:
-            continue
+    def get_portfolio(self, date=None):
+        instruments = collections.defaultdict(self._default_instrument)
+        currencies = collections.defaultdict(lambda: 0)
 
-        if isinstance(tx, CashOperation):
-            currencies[tx.currency] += tx.amount
-            continue
+        for tx in self.txs:
+            if date is not None and tx.date > date:
+                continue
 
-        instrument = instruments[tx.instrument]
-        instrument["fees"] += tx.fees
-        instrument["taxes"] += tx.taxes
-        if tx.type == OperationType.BUY:
-            total = (instrument["quantity"] + tx.quantity)
-            if total != 0:
-                instrument["price"] = (
-                    instrument["price"] * instrument["quantity"] +
-                    tx.amount
-                ) / total
-                instrument["average_price_bought"] = (
-                    (instrument["average_price_bought"] *
-                     instrument["bought"]) +
-                    tx.amount
-                ) / total
-            instrument["quantity"] = total
-            instrument["trades"] += 1
-            instrument["bought"] += tx.quantity
-        elif tx.type == OperationType.SELL:
-            instrument["quantity"] -= tx.quantity
-            instrument["trades"] += 1
-            instrument["gain"] += ((tx.price - instrument["price"]) *
-                                   tx.quantity)
-            total = tx.quantity + instrument["sold"]
-            if total != 0:
-                instrument["average_price_sold"] = (
-                    (instrument["average_price_sold"] * instrument["sold"]) +
-                    tx.amount
-                ) / total
-            instrument["sold"] += tx.quantity
-        elif tx.type == OperationType.DIVIDEND:
-            instrument["dividend"] += tx.amount
+            if isinstance(tx, CashOperation):
+                currencies[tx.currency] += tx.amount
+                continue
 
-    return instruments, currencies
+            instrument = instruments[tx.instrument]
+            instrument["fees"] += tx.fees
+            instrument["taxes"] += tx.taxes
+            if tx.type == OperationType.BUY:
+                total = (instrument["quantity"] + tx.quantity)
+                if total != 0:
+                    instrument["price"] = (
+                        instrument["price"] * instrument["quantity"] +
+                        tx.amount
+                    ) / total
+                    instrument["average_price_bought"] = (
+                        (instrument["average_price_bought"] *
+                         instrument["bought"]) +
+                        tx.amount
+                    ) / total
+                instrument["quantity"] = total
+                instrument["trades"] += 1
+                instrument["bought"] += tx.quantity
+            elif tx.type == OperationType.SELL:
+                instrument["quantity"] -= tx.quantity
+                instrument["trades"] += 1
+                instrument["gain"] += ((tx.price - instrument["price"]) *
+                                       tx.quantity)
+                total = tx.quantity + instrument["sold"]
+                if total != 0:
+                    instrument["average_price_sold"] = (
+                        (instrument["average_price_sold"] * instrument["sold"]) +
+                        tx.amount
+                    ) / total
+                instrument["sold"] += tx.quantity
+            elif tx.type == OperationType.DIVIDEND:
+                instrument["dividend"] += tx.amount
+
+        return instruments, currencies

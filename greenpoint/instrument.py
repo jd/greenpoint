@@ -107,7 +107,7 @@ def get_exchange_by_name(name):
         key=lambda ex: _leven_ex(lower, ex.name.lower())))[0]
 
 
-@attr.s
+@attr.s(hash=True)
 class Instrument(object):
     isin = attr.ib(validator=attr.validators.instance_of(str),
                    converter=str.upper)
