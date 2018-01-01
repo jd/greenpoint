@@ -42,19 +42,22 @@ def broker_import(broker_name=None):
         brokers = [broker_name]
     else:
         brokers = conf['brokers'].keys()
-    for broker_name in brokers:
-        broker_config = conf['brokers'].get(broker_name)
-        if broker_config is None:
-            raise click.ClickException(
-                "Unable to find broker %s in config" % broker_name)
-        broker_type = broker.REGISTRY.get(broker_config['type'])
-        if broker_type is None:
-            raise click.ClickException("Unknown broker type %s" % broker_type)
+    with click.progressbar(brokers,
+                           label='Fetching transactions') as bar:
+        for broker_name in bar:
+            broker_config = conf['brokers'].get(broker_name)
+            if broker_config is None:
+                raise click.ClickException(
+                    "Unable to find broker %s in config" % broker_name)
+            broker_type = broker.REGISTRY.get(broker_config['type'])
+            if broker_type is None:
+                raise click.ClickException(
+                    "Unknown broker type %s" % broker_type)
 
-        LOG.info("Importing transactions for %s", broker_name)
-        b = broker_type(broker_config)
-        txs = b.list_transactions()
-        storage.save_transactions(broker_name, txs)
+            LOG.info("Importing transactions for %s", broker_name)
+            b = broker_type(broker_config)
+            txs = b.list_transactions()
+            storage.save_transactions(broker_name, txs)
 
 
 @main.command()
