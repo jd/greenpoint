@@ -149,3 +149,28 @@ def test_quotes_property():
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.quotes.values()
     assert list(quotes) == []
+
+
+def test_live_quote_from_yahoo():
+    inst = instrument.Instrument(
+        isin="FR0011665280",
+        type=instrument.InstrumentType.STOCK,
+        name="Figeac Aero",
+        symbol="FGA",
+        currency="EUR",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quote = inst.fetch_live_quote_from_yahoo()
+    assert isinstance(quote, instrument.Quote)
+    # Close is current price
+    assert quote.low <= quote.close <=  quote.high
+    inst = instrument.Instrument(
+        isin="FR0011665281",
+        type=instrument.InstrumentType.STOCK,
+        name="Invalid",
+        symbol="FGAXX",
+        currency="EUR",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    quote = inst.fetch_live_quote_from_yahoo()
+    assert quote == None

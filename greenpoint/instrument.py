@@ -82,6 +82,20 @@ class Exchange(object):
         except IndexError:
             return None
 
+    YAHOO_MIC_MAP = {
+        "XPAR": "PA",
+        "XBRU": "BR",
+        "XAMS": "AS",
+        "XLON": "L",
+    }
+
+    @property
+    def yahoo_code(self):
+        try:
+            return self.YAHOO_MIC_MAP[self.mic]
+        except IndexError:
+            return None
+
 
 def list_exchanges():
     with open(
@@ -158,6 +172,20 @@ class Instrument(object):
             attr.validators.instance_of(str)),
         converter=attr.converters.optional(str.upper))
     _quotes = attr.ib(init=False, default=None, cmp=False)
+
+    @property
+    def google_symbol(self):
+        google_code = self.exchange.google_code
+        if google_code is None:
+            return
+        return google_code + ":" + self.symbol
+
+    @property
+    def yahoo_symbol(self):
+        yahoo_code = self.exchange.yahoo_code
+        if yahoo_code is None:
+            return
+        return self.symbol + "." + yahoo_code
 
     def fetch_quotes_from_boursorama(self, start=None, stop=None):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
@@ -242,17 +270,15 @@ class Instrument(object):
                                     "<td class=\"rgt rm\">(.+)\n")
 
     def fetch_quotes_from_google(self, start=None, stop=None):
-        google_code = self.exchange.google_code
-        if google_code is None:
-            LOG.warning("No Google code for exchange %r, cannot fetch quotes",
-                        self.exchange)
+        if self.google_symbol is None:
+            LOG.warning("No Google code for %r, cannot fetch quotes", self)
             return
 
         for index in itertools.count(0, 200):
             r = requests.get(
                 "https://finance.google.com/finance/historical"
-                "?q=%s:%s&num=200&start=%d"
-                % (google_code, self.symbol, index))
+                "?q=%s&num=200&start=%d"
+                % (self.google_symbol, index))
 
             results = list(self._GOOGLE_FINANCE_RE.finditer(r.text))
             if not len(results):
@@ -327,3 +353,32 @@ class Instrument(object):
                 self._quotes.update(self.fetch_quotes(start=start))
                 self.save_quotes()
         return self._quotes
+
+    def fetch_live_quote_from_yahoo(self):
+        if self.yahoo_symbol is None:
+            LOG.warning("No Yahoo code for %r, cannot fetch quotes", self)
+            return
+
+        r = requests.get("https://query1.finance.yahoo.com/v7/finance/quote?"
+                         "lang=en-US&region=US&corsDomain=finance.yahoo.com"
+                         "&fields=currency,"
+                         "regularMarketDayHigh,"
+                         "regularMarketDayLow,"
+                         "regularMarketOpen,"
+                         "regularMarketPrice,"
+                         "regularMarketTime,"
+                         "regularMarketVolume"
+                         "&symbols=" + self.yahoo_symbol)
+        result = r.json()['quoteResponse']['result']
+        if not len(result):
+            return
+        result = result[0]
+        return Quote(
+            date=datetime.datetime.utcfromtimestamp(
+                result['regularMarketTime']).date(),
+            open=result['regularMarketOpen'],
+            close=result['regularMarketPrice'],
+            low=result['regularMarketDayLow'],
+            high=result['regularMarketDayHigh'],
+            volume=result['regularMarketVolume'],
+        )
