@@ -72,6 +72,7 @@ class Exchange(object):
         "XNAS": "NASDAQ",
         "XNYS": "NYSE",
         "ARCX": "NYSEARCA",
+        "XASE": "NYSEAMERICAN",
     }
 
     @property
