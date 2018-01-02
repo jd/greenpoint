@@ -82,7 +82,7 @@ def portfolio(broker, date=None, include_all=False):
                 pi.average_price_bought, pi.average_price_sold,
                 pi.currency,
                 pi.date_first, pi.date_last
-            ] for pi in instruments
+            ] for pi in sorted(instruments, key=lambda pi: pi.instrument.name)
             # Use != so we show what might be negative and is a "bug"
             if include_all or pi.quantity != 0
         ],
