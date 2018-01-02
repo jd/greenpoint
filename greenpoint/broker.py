@@ -123,7 +123,8 @@ class Fortuneo(object):
             return portfolio.OperationType.TAX
         elif (op.startswith("ost de création de coupons") or
               op.startswith("annul. ost de création de coupons") or
-              op.startswith("conversion forme de titre")):
+              op.startswith("conversion forme de titre") or
+              op.startswith("ost d information")):
             return
         LOG.error("Unknown transaction type `%s'", operation)
 

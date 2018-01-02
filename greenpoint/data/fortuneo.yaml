@@ -1,0 +1,38 @@
+instruments:
+  "CLARANOVA": "https://bourse.fortuneo.fr/actions/cours-claranova-CLA-FR0004026714-23"
+  "AMUNDI ETF STOXX EUROPE 600 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-stoxx-europe-600-ucits-etf-C6E-FR0010791004-23"
+  "ROYAL DUTCH SHELLB": "https://bourse.fortuneo.fr/actions/cours-royal-dutch-shellb-RDSB-GB00B03MM408-46"
+  "KERLINK": "https://bourse.fortuneo.fr/actions/cours-kerlink-ALKLK-FR0013156007-23"
+  "BASTIDE LE CONFORT": "https://bourse.fortuneo.fr/actions/cours-bastide-le-confort-BLC-FR0000035370-23"
+  "LYXOR UCITS ETF Eastern Europe (CECE NTR EUR)": "https://bourse.fortuneo.fr/trackers/cours-lyxor-ucits-etf-eastern-europe-cece-ntr-eur-CEC-FR0010204073-23"
+  "AUBAY": "https://bourse.fortuneo.fr/actions/cours-aubay-AUB-FR0000063737-23"
+  "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23"
+  "AMUNDI ETF S&P 500 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-s-p-500-ucits-etf-500-FR0010892224-23"
+  "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23"
+  "SANOFI": "FR0000120578"
+  "LVMH": "FR0000121014"
+  "OCTO TECHNOLOGY":
+    isin: FR0004157428
+    type: stock
+    name: Octo Technology
+    pea: true
+    pea_pme: true
+    ttf: false
+    symbol: ALOCT
+    exchange: XPAR
+  "KERLINK DS":
+    isin: FR0013251287
+    type: stock
+    name: Kerlink DS
+    pea: false
+    pea_pme: false
+    ttf: false
+    symbol: KLKDS
+    exchange: XPAR
+  "ILIAD": "FR0004035913"
+  "DIRECT ENERGIE": "FR0004191674"
+  "ROYAL DUTCH SHELLB": "FTN000046GB00B03MM408"
+  "Hsbc Small Cap France A A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-hsbc-small-cap-france-a-a-i-FR0010058628-26"
+  "Federal Indiciel Us P A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-federal-indiciel-us-p-a-i-FR0000988057-26"
+  "BNP Paribas Easy MSCI Europe Small Caps ex Controversial Weapons UCITS ETF Capitalisation": "LU1291101555"
+  "Ensco 'A'": "https://bourse.fortuneo.fr/actions/cours-ensco-a-ESV-GB00B4VLR192-75"
