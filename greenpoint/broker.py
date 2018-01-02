@@ -19,7 +19,7 @@ from greenpoint import utils
 LOG = daiquiri.getLogger(__name__)
 
 
-TWO_YEARS = datetime.timedelta(days=365 * 2)
+ONE_YEAR = datetime.timedelta(days=365)
 
 
 class Fortuneo(object):
@@ -197,13 +197,19 @@ class Fortuneo(object):
         LOG.debug("Found info %s", data)
         return data
 
-    def list_transactions(self):
+    @staticmethod
+    def _iter_on_time(step=ONE_YEAR):
         end = datetime.datetime.now()
-        start = (end - TWO_YEARS)
+        start = (end - step)
+        while True:
+            yield (start, end)
+            end = start - datetime.timedelta(days=1)
+            start = end - step
 
+    def list_transactions(self):
         txs = []
 
-        while True:
+        for start, end in self._iter_on_time():
             if self.account_type == "ord":
                 page = self.session.post(
                     self.cash_history_page,
@@ -249,13 +255,8 @@ class Fortuneo(object):
                     # Currency is always EUR anyway
                     currency="EUR",
                 ))
-            end = start - datetime.timedelta(days=1)
-            start = end - TWO_YEARS
 
-        end = datetime.datetime.now()
-        start = (end - TWO_YEARS)
-
-        while True:
+        for start, end in self._iter_on_time():
             page = self.session.post(
                 self.history_page,
                 data={
@@ -320,9 +321,6 @@ class Fortuneo(object):
                     # Currency is always EUR anyway
                     currency="EUR",
                 ))
-
-            end = start - datetime.timedelta(days=1)
-            start = end - TWO_YEARS
 
         return txs
 
