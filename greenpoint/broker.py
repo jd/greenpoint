@@ -1,4 +1,5 @@
 import datetime
+import os.path
 
 import cachetools.func
 
@@ -7,6 +8,8 @@ import daiquiri
 from lxml import html
 
 import requests
+
+import yaml
 
 from greenpoint import instrument
 from greenpoint import portfolio
@@ -28,48 +31,6 @@ class Fortuneo(object):
                     "/historique/historique-titres.jsp?ca=%s")
 
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
-
-    INSTRUMENTS = {
-        "CLARANOVA": "https://bourse.fortuneo.fr/actions/cours-claranova-CLA-FR0004026714-23",
-        "AMUNDI ETF STOXX EUROPE 600 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-stoxx-europe-600-ucits-etf-C6E-FR0010791004-23",
-        "ROYAL DUTCH SHELLB": "https://bourse.fortuneo.fr/actions/cours-royal-dutch-shellb-RDSB-GB00B03MM408-46",
-        "KERLINK": "https://bourse.fortuneo.fr/actions/cours-kerlink-ALKLK-FR0013156007-23",
-        "BASTIDE LE CONFORT": "https://bourse.fortuneo.fr/actions/cours-bastide-le-confort-BLC-FR0000035370-23",
-        "LYXOR UCITS ETF Eastern Europe (CECE NTR EUR)": "https://bourse.fortuneo.fr/trackers/cours-lyxor-ucits-etf-eastern-europe-cece-ntr-eur-CEC-FR0010204073-23",
-        "AUBAY": "https://bourse.fortuneo.fr/actions/cours-aubay-AUB-FR0000063737-23",
-        "AMUNDI ETF MSCI EMERGING MARKETS UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-msci-emerging-markets-ucits-etf-AEEM-FR0010959676-23",
-        "AMUNDI ETF S&P 500 UCITS ETF": "https://bourse.fortuneo.fr/trackers/cours-amundi-etf-s-p-500-ucits-etf-500-FR0010892224-23",
-        "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23",
-        "SANOFI": "FR0000120578",
-        "LVMH": "FR0000121014",
-        "OCTO TECHNOLOGY": instrument.Instrument(
-            isin="FR0004157428",
-            type=instrument.InstrumentType.STOCK,
-            name="Octo Technology",
-            pea=True,
-            pea_pme=True,
-            ttf=False,
-            symbol="ALOCT",
-            exchange=instrument.get_exchange_by_mic("XPAR"),
-        ),
-        "KERLINK DS": instrument.Instrument(
-            isin="FR0013251287",
-            type=instrument.InstrumentType.STOCK,
-            name="Kerlink DS",
-            pea=False,
-            pea_pme=False,
-            ttf=False,
-            symbol="KLKDS",
-            exchange=instrument.get_exchange_by_mic("XPAR"),
-        ),
-        "ILIAD": "FR0004035913",
-        "DIRECT ENERGIE": "FR0004191674",
-        "ROYAL DUTCH SHELLB": "FTN000046GB00B03MM408",
-        "Hsbc Small Cap France A A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-hsbc-small-cap-france-a-a-i-FR0010058628-26",
-        "Federal Indiciel Us P A/i": "https://bourse.fortuneo.fr/sicav-fonds/cours-federal-indiciel-us-p-a-i-FR0000988057-26",
-        "BNP Paribas Easy MSCI Europe Small Caps ex Controversial Weapons UCITS ETF Capitalisation": "LU1291101555",
-        "Ensco 'A'": "https://bourse.fortuneo.fr/actions/cours-ensco-a-ESV-GB00B4VLR192-75",
-    }
 
     def __init__(self, conf):
         self.session = requests.Session()
@@ -109,6 +70,10 @@ class Fortuneo(object):
         else:
             raise ValueError("No valid `account` specified in config")
 
+        with open(os.path.join(os.path.dirname(__file__),
+                               "data", "fortuneo.yaml"), "r") as f:
+            self.cache = yaml.load(f.read())
+
     @staticmethod
     def _translate_op(operation):
         op = operation.lower()
@@ -136,12 +101,12 @@ class Fortuneo(object):
     def _get_instrument_info(self, name):
         LOG.debug("Fetching instrument %s", name)
 
-        info = self.INSTRUMENTS.get(name)
+        info = self.cache.get('instruments', {}).get(name)
         if info:
             LOG.debug("Instrument %s pre-configured", name)
             # If it's not a string, return the override
             if not isinstance(info, str):
-                return info
+                return instrument.Instrument(**info)
             if info.startswith("http://") or info.startswith("https://"):
                 url = info
             else:

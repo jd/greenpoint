@@ -33,6 +33,12 @@ class InstrumentType(enum.Enum):
     STOCK = "stock"
     FUND = "fund"
 
+    @classmethod
+    def strtoenum(cls, value):
+        if isinstance(value, cls):
+            return value
+        return cls[value.upper()]
+
 
 @attr.s(frozen=True)
 class Exchange(object):
@@ -109,11 +115,18 @@ def get_exchange_by_name(name):
         key=lambda ex: _leven_ex(lower, ex.name.lower())))[0]
 
 
+def _get_exchange_by_mic_if_necessary(value):
+    if isinstance(value, Exchange):
+        return value
+    return get_exchange_by_name(value)
+
+
 @attr.s(hash=True)
 class Instrument(object):
     isin = attr.ib(validator=attr.validators.instance_of(str),
                    converter=str.upper)
     type = attr.ib(validator=attr.validators.instance_of(InstrumentType),  # noqa
+                   converter=InstrumentType.strtoenum,
                    cmp=False)
     name = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(str)), cmp=False)
@@ -128,8 +141,11 @@ class Instrument(object):
         attr.validators.instance_of(bool)), cmp=False)
     ttf = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(bool)), cmp=False)
-    exchange = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(Exchange)), cmp=False)
+    exchange = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(Exchange)),
+        converter=attr.converters.optional(_get_exchange_by_mic_if_necessary),
+        cmp=False)
     _quotes = attr.ib(init=False, default=None, cmp=False)
 
     def fetch_quotes_from_boursorama(self):
