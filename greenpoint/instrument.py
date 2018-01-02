@@ -1,11 +1,14 @@
 import csv
 import datetime
+import itertools
 import os.path
 import re
 
 import attr
 
 import enum
+
+import daiquiri
 
 import leven
 
@@ -16,6 +19,9 @@ import orderedset
 import requests
 
 from greenpoint import storage
+
+
+LOG = daiquiri.getLogger(__name__)
 
 
 @attr.s(slots=True, frozen=True)
@@ -148,7 +154,7 @@ class Instrument(object):
         cmp=False)
     _quotes = attr.ib(init=False, default=None, cmp=False)
 
-    def fetch_quotes_from_boursorama(self):
+    def fetch_quotes_from_boursorama(self, start=None, stop=None):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
                          self.isin)
         try:
@@ -171,9 +177,14 @@ class Instrument(object):
         )
 
         for point in r.json()['dataSets'][0]['dataProvider']:
+            d = datetime.datetime.strptime(
+                point['d'][:-6], "%d/%m/%Y").date()
+            if start is not None and d < start:
+                continue
+            if stop is not None and d > stop:
+                continue
             yield Quote(
-                date=datetime.datetime.strptime(
-                    point['d'][:-6], "%d/%m/%Y").date(),
+                date=d,
                 open=float(point['o']),
                 close=float(point['c']),
                 high=float(point['h']),
@@ -181,15 +192,24 @@ class Instrument(object):
                 volume=point['v']
             )
 
-    def fetch_quotes_from_lesechos(self):
-        end = datetime.datetime.now().date().strftime("%Y%m%d")
+    def fetch_quotes_from_lesechos(self, start=None, stop=None):
+        if start is None:
+            start = datetime.date(2000, 1, 1)
+        if stop is None:
+            stop = datetime.datetime.now().date()
+
+        start = start.strftime("%Y%m%d")
+        stop = stop.strftime("%Y%m%d")
+
         r = requests.get("https://lesechos-bourse-fo-cdn.wlb.aw.atos.net" +
                          "/FDS/history.xml?entity=echos&view=ALL" +
                          "&code=" + self.isin +
                          "&codification=ISIN&adjusted=true&base100=false" +
                          "&exchange=" + self.exchange.operating_mic +
-                         "&sessWithNoQuot=false&beginDate=19000101&endDate=" +
-                         end + "&computeVar=true")
+                         "&sessWithNoQuot=false" +
+                         "&beginDate=" + start +
+                         "&endDate=" + stop +
+                         "&computeVar=true")
         xml = etree.fromstring(r.content)
         for history in xml.xpath("//historyResponse/history/historyDt"):
             yield Quote(
@@ -202,6 +222,13 @@ class Instrument(object):
                 volume=int(float(history.get("qty"))),
             )
 
+    # <td class="lm">Apr 21, 2017
+    # <td class="rgt">58.40
+    # <td class="rgt">59.90
+    # <td class="rgt">58.40
+    # <td class="rgt">59.90
+    # <td class="rgt rm">2,918
+
     _GOOGLE_FINANCE_RE = re.compile("<td class=\"lm\">(.+ \d+, \d+)\n"
                                     "<td class=\"rgt\">(.+)\n"
                                     "<td class=\"rgt\">(.+)\n"
@@ -209,41 +236,48 @@ class Instrument(object):
                                     "<td class=\"rgt\">(.+)\n"
                                     "<td class=\"rgt rm\">(.+)\n")
 
-    def fetch_quotes_from_google(self):
+    def fetch_quotes_from_google(self, start=None, stop=None):
         google_code = self.exchange.google_code
         if google_code is None:
+            LOG.warning("No Google code for exchange %r, cannot fetch quotes",
+                        self.exchange)
             return
 
-        r = requests.get(
-            "https://finance.google.com/finance/historical?q=%s:%s&num=200"
-            % (google_code, self.symbol))
+        for index in itertools.count(0, 200):
+            r = requests.get(
+                "https://finance.google.com/finance/historical"
+                "?q=%s:%s&num=200&start=%d"
+                % (google_code, self.symbol, index))
 
-        # <td class="lm">Apr 21, 2017
-        # <td class="rgt">58.40
-        # <td class="rgt">59.90
-        # <td class="rgt">58.40
-        # <td class="rgt">59.90
-        # <td class="rgt rm">2,918
+            results = list(self._GOOGLE_FINANCE_RE.finditer(r.text))
+            if not len(results):
+                return
 
-        for found in self._GOOGLE_FINANCE_RE.finditer(r.text):
-            date = datetime.datetime.strptime(
-                found.group(1), "%b %d, %Y").date()
-            values = []
-            for idx in range(2, 7):
-                v = found.group(idx)
-                if v == "-":
-                    break
-                v = float(v.replace(",", ""))
-                values.append(v)
-            else:
-                yield Quote(
-                    date=date,
-                    open=values[0],
-                    high=values[1],
-                    low=values[2],
-                    close=values[3],
-                    volume=int(values[4]),
-                )
+            for found in results:
+                date = datetime.datetime.strptime(
+                    found.group(1), "%b %d, %Y").date()
+                if start is not None and date < start:
+                    # Results are ordered descending
+                    # As soon as a date is before the start, we can stop
+                    return
+                if stop is not None and date > stop:
+                    continue
+                values = []
+                for idx in range(2, 7):
+                    v = found.group(idx)
+                    if v == "-":
+                        break
+                    v = float(v.replace(",", ""))
+                    values.append(v)
+                else:
+                    yield Quote(
+                        date=date,
+                        open=values[0],
+                        high=values[1],
+                        low=values[2],
+                        close=values[3],
+                        volume=int(values[4]),
+                    )
 
     QUOTES_PROVIDERS = {
         "boursorama": fetch_quotes_from_boursorama,
@@ -251,11 +285,11 @@ class Instrument(object):
         "google": fetch_quotes_from_google,
     }
 
-    def fetch_quotes(self):
+    def fetch_quotes(self, start=None, stop=None):
         """Get quotes from all available providers and merge them."""
         quotes_by_date = {}
         for func in self.QUOTES_PROVIDERS.values():
-            for quote in func(self):
+            for quote in func(self, start, stop):
                 quotes_by_date[quote.date] = quote
         return quotes_by_date
 
