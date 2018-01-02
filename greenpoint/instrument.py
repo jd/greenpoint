@@ -8,6 +8,8 @@ import attr
 
 import enum
 
+import cachetools.func
+
 import daiquiri
 
 import leven
@@ -382,3 +384,8 @@ class Instrument(object):
             high=result['regularMarketDayHigh'],
             volume=result['regularMarketVolume'],
         )
+
+    @property
+    @cachetools.func.ttl_cache(maxsize=1, ttl=60)
+    def quote(self):
+        return self.fetch_live_quote_from_yahoo()
