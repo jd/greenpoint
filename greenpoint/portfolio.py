@@ -152,6 +152,16 @@ class PortfolioInstrument(object):
             elif tx.type == OperationType.DIVIDEND:
                 self.dividend += tx.amount
 
+    @property
+    def potential_gain(self):
+        # FIXME(jd) currency conversion
+        # if self.instrument.currency != self.currency:
+        #     convert
+        quote = self.instrument.quote
+        if quote is None:
+            return None
+        return (quote.close - self.price) * self.quantity
+
 
 ATTRGETTER_INSTRUMENT = operator.attrgetter('instrument')
 

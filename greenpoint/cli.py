@@ -70,17 +70,22 @@ def broker_import(broker_name=None):
 
 def color_value(v):
     if v < 0:
-        return termcolor.colored(v, "red")
+        return termcolor.colored("%.2f" % v, "red")
     if v > 0:
-        return termcolor.colored(v, "green")
+        return termcolor.colored("%.2f" % v, "green")
     return v
 
 
-@main.command()
+@main.group(name="portfolio")
+def portfolio_group():
+    pass
+
+
+@portfolio_group.command(name="txs")
 @click.argument('broker')
 @click.option('--date')
 @click.option('--all', 'include_all', is_flag=True)
-def portfolio(broker, date=None, include_all=False):
+def portfolio_txs(broker, date=None, include_all=False):
     if date is not None:
         date = utils.parse_date(date)
 
@@ -120,9 +125,37 @@ def portfolio(broker, date=None, include_all=False):
     print(tabulate.tabulate([[termcolor.colored(k, attrs=['bold']),
                               color_value(v)]
                              for k, v in currencies.items()],
-                             headers=["Currency", "Amount"],
+                            headers=["Currency", "Amount"],
                             tablefmt='fancy_grid', floatfmt=".2f"))
 
+
+@portfolio_group.command(name="show")
+@click.argument('broker')
+def portfolio_show(broker):
+    pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
+    instruments, currencies = pfl.get_portfolio()
+
+    print(tabulate.tabulate(
+        [
+            [
+                termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
+                pi.quantity,
+                # FIXME(jd) Compute price with fees and taxes
+                pi.price,
+                pi.instrument.quote.close if pi.instrument.quote else "?",
+                color_value(pi.potential_gain)
+                if pi.potential_gain is not None else "?",
+                pi.currency,
+                pi.instrument.quote.date if pi.instrument.quote else "?",
+            ] for pi in sorted(instruments, key=lambda pi: pi.instrument.name)
+            # Use != so we show what might be negative and is a "bug"
+            if pi.quantity != 0
+        ],
+        headers=["Instrument", "Qty", "B. Price", "M. Price",
+                 "Gain",
+                 "$", "L. Trade"],
+        tablefmt='fancy_grid', floatfmt=".2f"),
+    )
 
 if __name__ == '__main__':
     import sys

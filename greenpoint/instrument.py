@@ -29,7 +29,8 @@ class Quote(object):
     close = attr.ib(validator=attr.validators.instance_of(float))
     high = attr.ib(validator=attr.validators.instance_of(float))
     low = attr.ib(validator=attr.validators.instance_of(float))
-    volume = attr.ib(validator=attr.validators.instance_of(int))
+    volume = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(int)))
 
 
 class InstrumentType(enum.Enum):
@@ -81,10 +82,11 @@ class Exchange(object):
             return None
 
     YAHOO_MIC_MAP = {
-        "XPAR": "PA",
-        "XBRU": "BR",
-        "XAMS": "AS",
-        "XLON": "L",
+        "XPAR": ".PA",
+        "XBRU": ".BR",
+        "XAMS": ".AS",
+        "XLON": ".L",
+        "XNYS": "",
     }
 
     @property
@@ -154,10 +156,12 @@ class Instrument(object):
         validator=attr.validators.optional(
             attr.validators.instance_of(str)),
         converter=attr.converters.optional(str.upper))
-    _quotes = attr.ib(init=False, default=None, cmp=False)
+    _quotes = attr.ib(init=False, default=None, cmp=False, repr=False)
 
     @property
     def google_symbol(self):
+        if self.exchange is None:
+            return
         google_code = self.exchange.google_code
         if google_code is None:
             return
@@ -165,10 +169,12 @@ class Instrument(object):
 
     @property
     def yahoo_symbol(self):
+        if self.exchange is None:
+            return
         yahoo_code = self.exchange.yahoo_code
         if yahoo_code is None:
             return
-        return self.symbol + "." + yahoo_code
+        return self.symbol + yahoo_code
 
     def fetch_quotes_from_boursorama(self, start=None, stop=None):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
@@ -209,6 +215,13 @@ class Instrument(object):
             )
 
     def fetch_quotes_from_lesechos(self, start=None, stop=None):
+        if self.exchange:
+            exchange = self.exchange.operating_mic
+        elif self.type == InstrumentType.FUND:
+            exchange = "WMORN"  # Morningstar fund
+        else:
+            return
+
         if start is None:
             start = datetime.date(2000, 1, 1)
         if stop is None:
@@ -221,13 +234,18 @@ class Instrument(object):
                          "/FDS/history.xml?entity=echos&view=ALL" +
                          "&code=" + self.isin +
                          "&codification=ISIN&adjusted=true&base100=false" +
-                         "&exchange=" + self.exchange.operating_mic +
+                         "&exchange=" + exchange +
                          "&sessWithNoQuot=false" +
                          "&beginDate=" + start +
                          "&endDate=" + stop +
                          "&computeVar=true")
         xml = etree.fromstring(r.content)
         for history in xml.xpath("//historyResponse/history/historyDt"):
+            qty = history.get("qty")
+            if qty is None:
+                volume = None
+            else:
+                volume = int(float(qty))
             yield Quote(
                 date=datetime.datetime.strptime(
                     history.get("dt"), "%Y%m%d").date(),
@@ -235,7 +253,7 @@ class Instrument(object):
                 close=float(history.get("closePx")),
                 high=float(history.get("highPx")),
                 low=float(history.get("lowPx")),
-                volume=int(float(history.get("qty"))),
+                volume=volume,
             )
 
     # <td class="lm">Apr 21, 2017
@@ -356,7 +374,7 @@ class Instrument(object):
         if not len(result):
             return
         result = result[0]
-        currency = result['currency']
+        currency = result['currency'].upper()
         if currency != self.currency:
             raise ValueError(
                 "Quote returned by Yahoo is in "
@@ -376,4 +394,8 @@ class Instrument(object):
     @property
     @cachetools.func.ttl_cache(maxsize=1, ttl=60)
     def quote(self):
-        return self.fetch_live_quote_from_yahoo()
+        quote = self.fetch_live_quote_from_yahoo()
+        if quote is None:
+            if self.quotes:
+                return self.quotes[sorted(self.quotes.keys())[-1]]
+        return quote
