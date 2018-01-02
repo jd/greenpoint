@@ -32,6 +32,10 @@ class Fortuneo(object):
 
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
+    with open(os.path.join(os.path.dirname(__file__),
+                           "data", "fortuneo.yaml"), "r") as f:
+        CACHE = yaml.load(f.read())
+
     def __init__(self, conf):
         self.session = requests.Session()
         login = self.session.post(self.ACCESS_PAGE,
@@ -70,10 +74,6 @@ class Fortuneo(object):
         else:
             raise ValueError("No valid `account` specified in config")
 
-        with open(os.path.join(os.path.dirname(__file__),
-                               "data", "fortuneo.yaml"), "r") as f:
-            self.cache = yaml.load(f.read())
-
     @staticmethod
     def _translate_op(operation):
         op = operation.lower()
@@ -97,11 +97,12 @@ class Fortuneo(object):
     def _to_float(s):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
+    @classmethod
     @cachetools.func.ttl_cache(maxsize=4096, ttl=3600 * 24)
-    def _get_instrument_info(self, name):
+    def _get_instrument_info(cls, session, name):
         LOG.debug("Fetching instrument %s", name)
 
-        info = self.cache.get('instruments', {}).get(name)
+        info = cls.CACHE.get('instruments', {}).get(name)
         if info:
             LOG.debug("Instrument %s pre-configured", name)
             # If it's not a string, return the override
@@ -110,11 +111,11 @@ class Fortuneo(object):
             if info.startswith("http://") or info.startswith("https://"):
                 url = info
             else:
-                url = self.INSTRUMENT_SEARCH_PAGE % info
+                url = cls.INSTRUMENT_SEARCH_PAGE % info
         else:
-            url = self.INSTRUMENT_SEARCH_PAGE % name
+            url = cls.INSTRUMENT_SEARCH_PAGE % name
 
-        page = self.session.get(url)
+        page = session.get(url)
         tree = html.fromstring(page.content)
 
         instrument_kwargs = {"name": name}
@@ -304,7 +305,7 @@ class Fortuneo(object):
                         fees = self._to_float(fees)
 
                 try:
-                    inst = self._get_instrument_info(inst)
+                    inst = self._get_instrument_info(self.session, inst)
                 except ValueError:
                     LOG.warning("Ignoring unknown instrument `%s'", inst)
                     continue
