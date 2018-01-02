@@ -286,7 +286,11 @@ class Instrument(object):
     }
 
     def fetch_quotes(self, start=None, stop=None):
-        """Get quotes from all available providers and merge them."""
+        """Get quotes from all available providers and merge them.
+
+        :param start: Timestamp to start at (included)
+        :param stop: Timestamp to stop at (included)
+        """
         quotes_by_date = {}
         for func in self.QUOTES_PROVIDERS.values():
             for quote in func(self, start, stop):
@@ -294,20 +298,27 @@ class Instrument(object):
         return quotes_by_date
 
     def save_quotes(self):
-        return storage.save(self.isin + "-quotes", self._quotes)
+        return storage.save(self.isin + "-quotes", list(self._quotes.values()))
 
     def load_quotes(self):
         try:
-            return storage.load(self.isin + "-quotes")
+            quotes = storage.load(self.isin + "-quotes")
         except FileNotFoundError:
             return {}
+        return {q.date: q for q in quotes}
 
     @property
     def quotes(self):
         if self._quotes is None:
             self._quotes = self.load_quotes()
             today = datetime.datetime.now().date()
-            if not self._quotes or max(self._quotes.keys()) < today:
-                self._quotes = self.fetch_quotes()
+            if self._quotes:
+                latest = max(self._quotes.keys())
+                start = latest + datetime.timedelta(days=1)
+            else:
+                latest = None
+                start = None
+            if latest is None or latest < today:
+                self._quotes.update(self.fetch_quotes(start=start))
                 self.save_quotes()
         return self._quotes
