@@ -1,5 +1,7 @@
 import datetime
 
+import pytest
+
 from greenpoint import instrument
 
 
@@ -189,6 +191,7 @@ def test_quote_property():
     assert isinstance(quote, instrument.Quote)
     # Close is current price
     assert quote.low <= quote.close <=  quote.high
+
     inst = instrument.Instrument(
         isin="FR0011665281",
         type=instrument.InstrumentType.STOCK,
@@ -199,3 +202,15 @@ def test_quote_property():
         pea=None, pea_pme=None, ttf=None)
     quote = inst.quote
     assert quote == None
+
+    inst = instrument.Instrument(
+        isin="FR0011665280",
+        type=instrument.InstrumentType.STOCK,
+        name="Figeac Aero",
+        symbol="FGA",
+        currency="USD",
+        exchange=instrument.get_exchange_by_mic("XPAR"),
+        pea=None, pea_pme=None, ttf=None)
+    with pytest.raises(ValueError) as e:
+        inst.quote
+        assert "Quote returned by Yahoo is in currency" in e

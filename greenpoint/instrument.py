@@ -375,6 +375,13 @@ class Instrument(object):
         if not len(result):
             return
         result = result[0]
+        currency = result['currency']
+        if currency != self.currency:
+            raise ValueError(
+                "Quote returned by Yahoo is in "
+                "currency %s but instrument uses %s"
+                % (currency, self.currency)
+            )
         return Quote(
             date=datetime.datetime.utcfromtimestamp(
                 result['regularMarketTime']).date(),
