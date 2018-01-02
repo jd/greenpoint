@@ -194,6 +194,10 @@ class Fortuneo(object):
         else:
             raise ValueError("Unable to find info for %s", name)
 
+        instrument_kwargs['currency'] = tree.xpath(
+            '//div[@class="digest-header-number"]/span/text()'
+        )[0].rsplit(" ", 1)[-1]
+
         data = instrument.Instrument(**instrument_kwargs)
         LOG.debug("Found info %s", data)
         return data

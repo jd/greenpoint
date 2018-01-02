@@ -153,6 +153,10 @@ class Instrument(object):
             attr.validators.instance_of(Exchange)),
         converter=attr.converters.optional(_get_exchange_by_mic_if_necessary),
         cmp=False)
+    currency = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(str)),
+        converter=attr.converters.optional(str.upper))
     _quotes = attr.ib(init=False, default=None, cmp=False)
 
     def fetch_quotes_from_boursorama(self, start=None, stop=None):

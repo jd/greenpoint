@@ -18,6 +18,7 @@ def test_quotes_from_lesechos():
         type=instrument.InstrumentType.STOCK,
         name="Figeac Aero",
         symbol="FGA",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_lesechos()
@@ -32,6 +33,7 @@ def test_quotes_from_lesechos():
         type=instrument.InstrumentType.STOCK,
         name="Invalid",
         symbol="FGAXX",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_lesechos()
@@ -44,6 +46,7 @@ def test_quotes_from_boursorama():
         type=instrument.InstrumentType.STOCK,
         name="Figeac Aero",
         symbol="FGA",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_boursorama()
@@ -58,6 +61,7 @@ def test_quotes_from_boursorama():
         type=instrument.InstrumentType.STOCK,
         name="Invalid",
         symbol="FGAXX",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_boursorama()
@@ -70,6 +74,7 @@ def test_quotes_from_google():
         type=instrument.InstrumentType.STOCK,
         name="Figeac Aero",
         symbol="FGA",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_google()
@@ -84,6 +89,7 @@ def test_quotes_from_google():
         type=instrument.InstrumentType.STOCK,
         name="Invalid",
         symbol="FGAXX",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_google()
@@ -96,6 +102,7 @@ def test_quotes():
         type=instrument.InstrumentType.STOCK,
         name="Figeac Aero",
         symbol="FGA",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes().values()
@@ -110,6 +117,7 @@ def test_quotes():
         type=instrument.InstrumentType.STOCK,
         name="Invalid",
         symbol="FGAXX",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes().values()
@@ -122,6 +130,7 @@ def test_quotes_property():
         type=instrument.InstrumentType.STOCK,
         name="Figeac Aero",
         symbol="FGA",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
@@ -129,12 +138,13 @@ def test_quotes_property():
                             close=17.69,
                             high=17.69,
                             low=16.25,
-                            volume=179707) in inst.quotes.values()
+                            volume=252461) in inst.quotes.values()
     inst = instrument.Instrument(
         isin="FR0011665281",
         type=instrument.InstrumentType.STOCK,
         name="Invalid",
         symbol="FGAXX",
+        currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.quotes.values()

@@ -20,6 +20,7 @@ instruments:
     ttf: false
     symbol: ALOCT
     exchange: XPAR
+    currency: EUR
   "KERLINK DS":
     isin: FR0013251287
     type: stock
@@ -29,6 +30,7 @@ instruments:
     ttf: false
     symbol: KLKDS
     exchange: XPAR
+    currency: EUR
   "ILIAD": "FR0004035913"
   "DIRECT ENERGIE": "FR0004191674"
   "ROYAL DUTCH SHELLB": "FTN000046GB00B03MM408"

@@ -54,10 +54,6 @@ class Operation(object):
 @attr.s
 class PortfolioInstrument(object):
     txs = attr.ib(validator=attr.validators.instance_of(list))
-    currency = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)),
-                       converter=attr.converters.optional(str.upper),
-                       init=False)
     instrument = attr.ib(
         validator=attr.validators.instance_of(
             instrument.Instrument),
