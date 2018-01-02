@@ -97,6 +97,14 @@ class Fortuneo(object):
     def _to_float(s):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
+    _EXCHANGE_MAP = {
+        "euronext paris": instrument.get_exchange_by_mic("XPAR"),
+        "euronext bruxelles": instrument.get_exchange_by_mic("XBRU"),
+        "new york stock exchange": instrument.get_exchange_by_mic("XNYS"),
+        "lse foreign currency": instrument.get_exchange_by_mic("XLON"),
+        "euronext amsterdam": instrument.get_exchange_by_mic("XAMS"),
+    }
+
     @classmethod
     @cachetools.func.ttl_cache(maxsize=4096, ttl=3600 * 24)
     def _get_instrument_info(cls, session, name):
@@ -140,9 +148,7 @@ class Fortuneo(object):
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-            instrument_kwargs['exchange'] = instrument.get_exchange_by_name(
-                exchange
-            )
+            instrument_kwargs['exchange'] = cls._EXCHANGE_MAP[exchange.lower()]
         elif page.url.startswith("https://bourse.fortuneo.fr/trackers/"):
             # ETF
             caracts = tree.xpath(
@@ -170,9 +176,7 @@ class Fortuneo(object):
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-            instrument_kwargs['exchange'] = instrument.get_exchange_by_name(
-                exchange
-            )
+            instrument_kwargs['exchange'] = cls._EXCHANGE_MAP[exchange.lower()]
         elif page.url.startswith("https://bourse.fortuneo.fr/sicav-fonds/"):
             # Mutual funds
             cols = tree.xpath(

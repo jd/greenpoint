@@ -12,11 +12,7 @@ import cachetools.func
 
 import daiquiri
 
-import leven
-
 from lxml import etree
-
-import orderedset
 
 import requests
 
@@ -123,25 +119,10 @@ def get_exchange_by_mic(mic):
     return ExchangesMICMap[mic]
 
 
-def _leven_ex(target, ex_name):
-    if target in ex_name:
-        return -1
-    return leven.levenshtein(
-        target,
-        " ".join(orderedset.OrderedSet(ex_name.split(" "))))
-
-
-def get_exchange_by_name(name):
-    lower = name.lower()
-    return list(sorted(
-        Exchanges,
-        key=lambda ex: _leven_ex(lower, ex.name.lower())))[0]
-
-
 def _get_exchange_by_mic_if_necessary(value):
     if isinstance(value, Exchange):
         return value
-    return get_exchange_by_name(value)
+    return get_exchange_by_mic(value)
 
 
 @attr.s(hash=True)

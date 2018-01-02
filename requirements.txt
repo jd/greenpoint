@@ -7,8 +7,6 @@ cachetools
 iso8601
 python-dateutil
 attrs
-leven
-orderedset
 tabulate
 colorama
 termcolor
