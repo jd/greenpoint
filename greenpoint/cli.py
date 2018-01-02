@@ -65,7 +65,8 @@ def broker_import(broker_name=None):
 @main.command()
 @click.argument('broker')
 @click.option('--date')
-def portfolio(broker, date=None):
+@click.option('--all', 'include_all', is_flag=True)
+def portfolio(broker, date=None, include_all=False):
     if date is not None:
         date = utils.parse_date(date)
 
@@ -82,6 +83,8 @@ def portfolio(broker, date=None):
                 pi.currency,
                 pi.date_first, pi.date_last
             ] for pi in instruments
+            # Use != so we show what might be negative and is a "bug"
+            if include_all or pi.quantity != 0
         ],
         headers=["Instrument", "Qty", "Price", "Taxes", "Div.", "Fees",
                  "Gain", "Bought", "Sold", "Avg P. Bought", "Avg P. Sold",
