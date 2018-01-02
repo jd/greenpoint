@@ -2,9 +2,13 @@ import logging
 
 import click
 
+import colorama
+
 import daiquiri
 
 import tabulate
+
+import termcolor
 
 from greenpoint import broker
 from greenpoint import config
@@ -19,12 +23,14 @@ LOG = daiquiri.getLogger(__name__)
 @click.group()
 @click.option('--debug', is_flag=True)
 def main(debug=False):
+    colorama.init()
     daiquiri.setup(level=logging.DEBUG if debug else logging.WARNING)
 
 
 @main.group(name="broker")
 def broker_():
     pass
+
 
 @broker_.command(name="list",
                  help="List configured brokers")
@@ -62,6 +68,14 @@ def broker_import(broker_name=None):
             storage.save_transactions(broker_name, txs)
 
 
+def color_value(v):
+    if v < 0:
+        return termcolor.colored(v, "red")
+    if v > 0:
+        return termcolor.colored(v, "green")
+    return v
+
+
 @main.command()
 @click.argument('broker')
 @click.option('--date')
@@ -76,9 +90,11 @@ def portfolio(broker, date=None, include_all=False):
     print(tabulate.tabulate(
         [
             [
-                pi.instrument.name[:30], pi.quantity,
+                termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
+                pi.quantity,
                 pi.price, pi.taxes, pi.dividend, pi.fees,
-                pi.gain, pi.bought, pi.sold,
+                color_value(pi.gain),
+                pi.bought, pi.sold,
                 pi.average_price_bought, pi.average_price_sold,
                 pi.currency,
                 pi.date_first, pi.date_last
@@ -93,7 +109,9 @@ def portfolio(broker, date=None, include_all=False):
         tablefmt='fancy_grid', floatfmt=".2f"),
     )
 
-    print(tabulate.tabulate([[k, v] for k, v in currencies.items()],
+    print(tabulate.tabulate([[termcolor.colored(k, attrs=['bold']),
+                              color_value(v)]
+                             for k, v in currencies.items()],
                              headers=["Currency", "Amount"],
                             tablefmt='fancy_grid', floatfmt=".2f"))
 

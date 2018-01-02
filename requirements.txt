@@ -10,3 +10,5 @@ attrs
 leven
 orderedset
 tabulate
+colorama
+termcolor
