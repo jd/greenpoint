@@ -109,6 +109,14 @@ def portfolio(broker, date=None, include_all=False):
         tablefmt='fancy_grid', floatfmt=".2f"),
     )
 
+    print(tabulate.tabulate(
+        [
+            [color_value(sum(pi.gain for pi in instruments))],
+        ],
+        headers=(termcolor.colored("Gain"),),
+        tablefmt='fancy_grid', floatfmt=".2f")
+    )
+
     print(tabulate.tabulate([[termcolor.colored(k, attrs=['bold']),
                               color_value(v)]
                              for k, v in currencies.items()],
