@@ -76,7 +76,7 @@ def portfolio(broker, date=None, include_all=False):
     print(tabulate.tabulate(
         [
             [
-                pi.instrument.name[:29], pi.quantity,
+                pi.instrument.name[:30], pi.quantity,
                 pi.price, pi.taxes, pi.dividend, pi.fees,
                 pi.gain, pi.bought, pi.sold,
                 pi.average_price_bought, pi.average_price_sold,
@@ -88,7 +88,7 @@ def portfolio(broker, date=None, include_all=False):
         ],
         headers=["Instrument", "Qty", "Price", "Taxes", "Div.", "Fees",
                  "Gain", "Bought", "Sold", "Avg P. Bought", "Avg P. Sold",
-                 "Curr.",
+                 "$",
                  "First", "Last"],
         tablefmt='fancy_grid', floatfmt=".2f"),
     )
