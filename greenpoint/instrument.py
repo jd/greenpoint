@@ -22,6 +22,8 @@ from greenpoint import storage
 
 LOG = daiquiri.getLogger(__name__)
 
+ONE_DAY = datetime.timedelta(days=1)
+
 
 class QuoteList(dict):
     def __init__(self, quotes):
@@ -378,11 +380,11 @@ class Instrument(object):
             today = datetime.datetime.now().date()
             if self._quotes:
                 latest = max(self._quotes.keys())
-                start = latest + datetime.timedelta(days=1)
+                start = latest + ONE_DAY
             else:
                 latest = None
                 start = None
-            if latest is None or latest < today:
+            if latest is None or latest < (today - ONE_DAY):
                 self._quotes.update(self.fetch_quotes(start=start))
                 self.save_quotes()
         return self._quotes
