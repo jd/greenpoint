@@ -201,7 +201,12 @@ class Instrument(object):
     @property
     def yahoo_symbol(self):
         if self.exchange is None:
-            return
+            if self.type == InstrumentType.FUND:
+                # NOTE This is probably wrong, but currently we only support
+                # fund that are traded in France, so that works for Yahoo.
+                return self.isin + ".PA"
+            else:
+                return
         yahoo_code = self.exchange.yahoo_code
         if yahoo_code is None:
             return
@@ -415,6 +420,9 @@ class Instrument(object):
                 "currency %s but instrument uses %s"
                 % (currency, self.currency)
             )
+        # Safe guard
+        if 'regularMarketOpen' not in result:
+            return
         return Quote(
             date=datetime.datetime.utcfromtimestamp(
                 result['regularMarketTime']).date(),
