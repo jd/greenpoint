@@ -392,7 +392,7 @@ class Instrument(object):
         )
 
     @property
-    @cachetools.func.ttl_cache(maxsize=1, ttl=60)
+    @cachetools.func.ttl_cache(maxsize=8192, ttl=60)
     def quote(self):
         quote = self.fetch_live_quote_from_yahoo()
         if quote is None:
