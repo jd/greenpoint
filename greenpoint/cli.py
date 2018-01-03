@@ -135,29 +135,36 @@ def portfolio_show(broker):
     pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
     instruments, currencies = pfl.get_portfolio()
 
+    lines = []
+    for pi in sorted(instruments, key=lambda pi: pi.instrument.name):
+        # Use == so we show what might be negative and is a "bug"
+        if pi.quantity == 0:
+            continue
+
+        potential_gain = pi.potential_gain()
+        potential_gain_since_last = pi.potential_gain(-1)
+
+        lines.append([
+            termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
+            pi.quantity,
+            # FIXME(jd) Compute price with fees and taxes
+            pi.price,
+            pi.instrument.quote.close if pi.instrument.quote else "?",
+            color_value(potential_gain)
+            if potential_gain is not None else "?",
+            color_value(potential_gain_since_last)
+            if potential_gain_since_last is not None else "?",
+            pi.currency,
+            pi.instrument.quote.date if pi.instrument.quote else "?",
+        ])
+
     print(tabulate.tabulate(
-        [
-            [
-                termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
-                pi.quantity,
-                # FIXME(jd) Compute price with fees and taxes
-                pi.price,
-                pi.instrument.quote.close if pi.instrument.quote else "?",
-                color_value(pi.potential_gain())
-                if pi.potential_gain() is not None else "?",
-                color_value(pi.potential_gain(-1))
-                if pi.potential_gain(-1) is not None else "?",
-                pi.currency,
-                pi.instrument.quote.date if pi.instrument.quote else "?",
-            ] for pi in sorted(instruments, key=lambda pi: pi.instrument.name)
-            # Use != so we show what might be negative and is a "bug"
-            if pi.quantity != 0
-        ],
+        lines,
         headers=["Instrument", "Qty", "B. Price", "M. Price",
                  "Gain", "Last Daily Gain",
                  "$", "L. Trade"],
-        tablefmt='fancy_grid', floatfmt=".2f"),
-    )
+        tablefmt='fancy_grid', floatfmt=".2f",
+    ))
 
 if __name__ == '__main__':
     import sys
