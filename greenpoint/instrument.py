@@ -1,3 +1,4 @@
+import bisect
 import csv
 import datetime
 import itertools
@@ -33,10 +34,17 @@ class QuoteList(dict):
                 return self[keys[key]]
         elif isinstance(key, slice):
             keys = sorted(self.keys())
+            if isinstance(key.start, datetime.date):
+                key = slice(bisect.bisect_left(keys, key.start),
+                            key.stop,
+                            key.step)
+            if isinstance(key.stop, datetime.date):
+                key = slice(key.start,
+                            bisect.bisect_right(keys, key.stop),
+                            key.step)
             if keys:
                 return [self[v] for v in keys[key]]
         return super(QuoteList, self).__getitem__(key)
-
 
 
 @attr.s(slots=True, frozen=True)

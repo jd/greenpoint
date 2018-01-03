@@ -229,3 +229,10 @@ def test_quotes_list():
     assert ql[3] == q4
     assert ql[q3.date] == q3
     assert ql[q2.date] == q2
+    assert ql[:q3.date] == [q1, q2, q3]
+    assert ql[q1.date:q3.date] == [q1, q2, q3]
+    assert ql[q2.date:] == [q2, q3, q4]
+    assert ql[datetime.date(2017, 1, 1):] == []
+    assert ql[:datetime.date(2015, 1, 1)] == []
+    assert ql[:datetime.date(2016, 12, 13)] == [q1]
+    assert ql[datetime.date(2016, 12, 13):] == [q2, q3, q4]
