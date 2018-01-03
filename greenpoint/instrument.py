@@ -22,6 +22,23 @@ from greenpoint import storage
 LOG = daiquiri.getLogger(__name__)
 
 
+class QuoteList(dict):
+    def __init__(self, quotes):
+        super(QuoteList, self).__init__({q.date: q for q in quotes})
+
+    def __getitem__(self, key):
+        if isinstance(key, int):
+            keys = sorted(self.keys())
+            if keys:
+                return self[keys[key]]
+        elif isinstance(key, slice):
+            keys = sorted(self.keys())
+            if keys:
+                return [self[v] for v in keys[key]]
+        return super(QuoteList, self).__getitem__(key)
+
+
+
 @attr.s(slots=True, frozen=True)
 class Quote(object):
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
@@ -343,8 +360,8 @@ class Instrument(object):
         try:
             quotes = storage.load(self.isin + "-quotes")
         except FileNotFoundError:
-            return {}
-        return {q.date: q for q in quotes}
+            return QuoteList([])
+        return QuoteList(quotes)
 
     @property
     def quotes(self):

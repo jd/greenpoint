@@ -126,6 +126,7 @@ def test_quotes_property():
         currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
+    assert isinstance(inst.quotes, instrument.QuoteList)
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -206,3 +207,25 @@ def test_quote_property():
     with pytest.raises(ValueError) as e:
         inst.quote
         assert "Quote returned by Yahoo is in currency" in e
+
+
+def test_quotes_list():
+    q1 = instrument.Quote(date=datetime.date(2016, 12, 12),
+                          low=None, high=None, open=None, close=None,
+                          volume=None)
+    q2 = instrument.Quote(date=datetime.date(2016, 12, 18),
+                          low=None, high=None, open=None, close=None,
+                          volume=None)
+    q3 = instrument.Quote(date=datetime.date(2016, 12, 19),
+                          low=None, high=None, open=None, close=None,
+                          volume=None)
+    q4 = instrument.Quote(date=datetime.date(2016, 12, 21),
+                          low=None, high=None, open=None, close=None,
+                          volume=None)
+    ql = instrument.QuoteList([q1, q2, q4, q3])
+    assert ql[0] == q1
+    assert ql[1] == q2
+    assert ql[2] == q3
+    assert ql[3] == q4
+    assert ql[q3.date] == q3
+    assert ql[q2.date] == q2
