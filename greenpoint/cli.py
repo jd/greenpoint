@@ -143,8 +143,10 @@ def portfolio_show(broker):
                 # FIXME(jd) Compute price with fees and taxes
                 pi.price,
                 pi.instrument.quote.close if pi.instrument.quote else "?",
-                color_value(pi.potential_gain)
-                if pi.potential_gain is not None else "?",
+                color_value(pi.potential_gain())
+                if pi.potential_gain() is not None else "?",
+                color_value(pi.potential_gain(-1))
+                if pi.potential_gain(-1) is not None else "?",
                 pi.currency,
                 pi.instrument.quote.date if pi.instrument.quote else "?",
             ] for pi in sorted(instruments, key=lambda pi: pi.instrument.name)
@@ -152,7 +154,7 @@ def portfolio_show(broker):
             if pi.quantity != 0
         ],
         headers=["Instrument", "Qty", "B. Price", "M. Price",
-                 "Gain",
+                 "Gain", "Last Daily Gain",
                  "$", "L. Trade"],
         tablefmt='fancy_grid', floatfmt=".2f"),
     )
