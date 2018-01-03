@@ -25,10 +25,14 @@ LOG = daiquiri.getLogger(__name__)
 @attr.s(slots=True, frozen=True)
 class Quote(object):
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
-    open = attr.ib(validator=attr.validators.instance_of(float))  # noqa
-    close = attr.ib(validator=attr.validators.instance_of(float))
-    high = attr.ib(validator=attr.validators.instance_of(float))
-    low = attr.ib(validator=attr.validators.instance_of(float))
+    open = attr.ib(validator=attr.validators.optional(  # noqa
+        attr.validators.instance_of(float)))
+    close = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(float)))
+    high = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(float)))
+    low = attr.ib(validator=attr.validators.optional(
+        attr.validators.instance_of(float)))
     volume = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(int)))
 
@@ -241,20 +245,23 @@ class Instrument(object):
                          "&computeVar=true")
         xml = etree.fromstring(r.content)
         for history in xml.xpath("//historyResponse/history/historyDt"):
-            qty = history.get("qty")
-            if qty is None:
-                volume = None
-            else:
-                volume = int(float(qty))
-            yield Quote(
-                date=datetime.datetime.strptime(
+            kwargs = {
+                "date": datetime.datetime.strptime(
                     history.get("dt"), "%Y%m%d").date(),
-                open=float(history.get("openPx")),
-                close=float(history.get("closePx")),
-                high=float(history.get("highPx")),
-                low=float(history.get("lowPx")),
-                volume=volume,
-            )
+            }
+            for (k, kwarg) in (("openPx", "open"),
+                               ("closePx", "close"),
+                               ("highPx", "high"),
+                               ("lowPx", "low"),
+                               ("qty", "volume")):
+                v = history.get(k)
+                if v is not None:
+                    v = float(v)
+                    if kwarg == "volume":
+                        v = int(v)
+                kwargs[kwarg] = v
+
+            yield Quote(**kwargs)
 
     # <td class="lm">Apr 21, 2017
     # <td class="rgt">58.40
