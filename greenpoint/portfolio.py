@@ -197,6 +197,6 @@ class Portfolio(object):
                         key=ATTRGETTER_INSTRUMENT):
                     instruments.append(PortfolioInstrument(list(gtxs)))
             else:
-                raise Exception(type_, type_ == CashOperation)
+                raise RuntimeError("Unknown operation type")
 
         return instruments, currencies
