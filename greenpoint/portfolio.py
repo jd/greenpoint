@@ -156,17 +156,17 @@ class PortfolioInstrument(object):
         # FIXME(jd) currency conversion
         # if self.instrument.currency != self.currency:
         #     convert
+        quote = self.instrument.quote
+        if quote is None:
+            return None
         if since is None:
-            quote = self.instrument.quote
-            if quote is None:
-                return None
             price = self.price
         else:
-            quote = self.instrument.quote
-            previous_quote = self.instrument.quotes[
-                :quote.date - datetime.timedelta(days=1)
-            ][-1]
-            if quote is None or previous_quote is None:
+            try:
+                previous_quote = self.instrument.quotes[
+                    :quote.date - datetime.timedelta(days=1)
+                ][-1]
+            except KeyError:
                 return None
             price = previous_quote.close
         return (quote.close - price) * self.quantity

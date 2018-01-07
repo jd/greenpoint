@@ -34,8 +34,11 @@ class QuoteList(dict):
             keys = sorted(self.keys())
             if keys:
                 return self[keys[key]]
+            raise KeyError(key)
         elif isinstance(key, slice):
             keys = sorted(self.keys())
+            if not keys:
+                raise KeyError(key)
             if isinstance(key.start, datetime.date):
                 key = slice(bisect.bisect_left(keys, key.start),
                             key.stop,
@@ -44,8 +47,7 @@ class QuoteList(dict):
                 key = slice(key.start,
                             bisect.bisect_right(keys, key.stop),
                             key.step)
-            if keys:
-                return [self[v] for v in keys[key]]
+            return [self[v] for v in keys[key]]
         return super(QuoteList, self).__getitem__(key)
 
 
@@ -187,7 +189,10 @@ class Instrument(object):
         validator=attr.validators.optional(
             attr.validators.instance_of(str)),
         converter=attr.converters.optional(str.upper))
-    _quotes = attr.ib(init=False, default=None, cmp=False, repr=False)
+    quotes = attr.ib(init=False, cmp=False, repr=False,
+                     default=attr.Factory(lambda: QuoteList([])),
+                     validator=attr.validators.optional(
+                         attr.validators.instance_of(QuoteList)))
 
     @property
     def google_symbol(self):
@@ -211,6 +216,26 @@ class Instrument(object):
         if yahoo_code is None:
             return
         return self.symbol + yahoo_code
+
+    @staticmethod
+    def get_path(isin):
+        return os.path.join("instruments", isin.upper())
+
+    @property
+    def path(self):
+        return self.get_path(self.isin)
+
+    def save(self):
+        return storage.save(self.path, self)
+
+    @classmethod
+    def load(cls, **kwargs):
+        try:
+            return storage.load(cls.get_path(kwargs['isin']))
+        except FileNotFoundError:
+            i = cls(**kwargs)
+            i.save()
+            return i
 
     def fetch_quotes_from_boursorama(self, start=None, stop=None):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
@@ -356,43 +381,17 @@ class Instrument(object):
         "google": fetch_quotes_from_google,
     }
 
-    def fetch_quotes(self, start=None, stop=None):
+    def refresh_quotes(self, start=None, stop=None):
         """Get quotes from all available providers and merge them.
 
         :param start: Timestamp to start at (included)
         :param stop: Timestamp to stop at (included)
         """
-        quotes_by_date = {}
+        quotes = []
         for func in self.QUOTES_PROVIDERS.values():
-            for quote in func(self, start, stop):
-                quotes_by_date[quote.date] = quote
-        return quotes_by_date
-
-    def save_quotes(self):
-        return storage.save(self.isin + "-quotes", list(self._quotes.values()))
-
-    def load_quotes(self):
-        try:
-            quotes = storage.load(self.isin + "-quotes")
-        except FileNotFoundError:
-            return QuoteList([])
-        return QuoteList(quotes)
-
-    @property
-    def quotes(self):
-        if self._quotes is None:
-            self._quotes = self.load_quotes()
-            today = datetime.datetime.now().date()
-            if self._quotes:
-                latest = max(self._quotes.keys())
-                start = latest + ONE_DAY
-            else:
-                latest = None
-                start = None
-            if latest is None or latest < (today - ONE_DAY):
-                self._quotes.update(self.fetch_quotes(start=start))
-                self.save_quotes()
-        return self._quotes
+            quotes.extend(func(self, start, stop))
+        self.quotes = QuoteList(quotes)
+        self.save()
 
     def fetch_live_quote_from_yahoo(self):
         if self.yahoo_symbol is None:

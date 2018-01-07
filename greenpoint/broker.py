@@ -115,7 +115,7 @@ class Fortuneo(object):
             LOG.debug("Instrument %s pre-configured", name)
             # If it's not a string, return the override
             if not isinstance(info, str):
-                return instrument.Instrument(**info)
+                return instrument.Instrument.load(**info)
             if info.startswith("http://") or info.startswith("https://"):
                 url = info
             else:
@@ -202,7 +202,7 @@ class Fortuneo(object):
             '//div[@class="digest-header-number"]/span/text()'
         )[0].rsplit(" ", 1)[-1]
 
-        data = instrument.Instrument(**instrument_kwargs)
+        data = instrument.Instrument.load(**instrument_kwargs)
         LOG.debug("Found info %s", data)
         return data
 

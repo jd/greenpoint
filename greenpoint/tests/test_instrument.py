@@ -98,7 +98,8 @@ def test_quotes():
         currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.fetch_quotes().values()
+    inst.refresh_quotes()
+    quotes = inst.quotes.values()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
                             open=16.73,
                             close=17.69,
@@ -113,11 +114,12 @@ def test_quotes():
         currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    quotes = inst.fetch_quotes().values()
+    inst.refresh_quotes()
+    quotes = inst.quotes.values()
     assert list(quotes) == []
 
 
-def test_quotes_property():
+def test_save_load():
     inst = instrument.Instrument(
         isin="FR0011665280",
         type=instrument.InstrumentType.STOCK,
@@ -126,23 +128,10 @@ def test_quotes_property():
         currency="EUR",
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
-    assert isinstance(inst.quotes, instrument.QuoteList)
-    assert instrument.Quote(date=datetime.date(2017, 12, 20),
-                            open=16.73,
-                            close=17.69,
-                            high=17.69,
-                            low=16.25,
-                            volume=252461) in inst.quotes.values()
-    inst = instrument.Instrument(
-        isin="FR0011665281",
-        type=instrument.InstrumentType.STOCK,
-        name="Invalid",
-        symbol="FGAXX",
-        currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
-        pea=None, pea_pme=None, ttf=None)
-    quotes = inst.quotes.values()
-    assert list(quotes) == []
+    inst.refresh_quotes()
+    inst.save()
+    inst2 = instrument.Instrument.load(isin="FR0011665280")
+    assert inst == inst2
 
 
 def test_live_quote_from_yahoo():
@@ -157,7 +146,7 @@ def test_live_quote_from_yahoo():
     quote = inst.fetch_live_quote_from_yahoo()
     assert isinstance(quote, instrument.Quote)
     # Close is current price
-    assert quote.low <= quote.close <=  quote.high
+    assert quote.low <= quote.close <= quote.high
     inst = instrument.Instrument(
         isin="FR0011665281",
         type=instrument.InstrumentType.STOCK,
@@ -167,7 +156,7 @@ def test_live_quote_from_yahoo():
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quote = inst.fetch_live_quote_from_yahoo()
-    assert quote == None
+    assert quote is None
 
 
 def test_quote_property():
@@ -182,7 +171,7 @@ def test_quote_property():
     quote = inst.quote
     assert isinstance(quote, instrument.Quote)
     # Close is current price
-    assert quote.low <= quote.close <=  quote.high
+    assert quote.low <= quote.close <= quote.high
 
     inst = instrument.Instrument(
         isin="FR0011665281",
@@ -193,7 +182,7 @@ def test_quote_property():
         exchange=instrument.get_exchange_by_mic("XPAR"),
         pea=None, pea_pme=None, ttf=None)
     quote = inst.quote
-    assert quote == None
+    assert quote is None
 
     # Check case of currency
     inst = instrument.Instrument(
