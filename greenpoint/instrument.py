@@ -1,5 +1,4 @@
 import bisect
-import csv
 import datetime
 import itertools
 import os.path
@@ -16,6 +15,9 @@ import daiquiri
 from lxml import etree
 
 import requests
+
+import psycopg2
+import psycopg2.extras
 
 from greenpoint import storage
 
@@ -131,19 +133,18 @@ class Exchange(object):
 
 
 def list_exchanges():
-    with open(
-            os.path.join(
-                os.path.dirname(__file__), "data/ISO10383_MIC.csv"),
-            "r", encoding="latin-1") as f:
-        for row in csv.DictReader(f):
-            yield Exchange(
-                mic=row['MIC'],
-                operating_mic=row['OPERATING MIC'],
-                name=row['NAME-INSTITUTION DESCRIPTION'],
-                country=row['COUNTRY'],
-                country_code=row['ISO COUNTRY CODE (ISO 3166)'],
-                city=row['CITY'],
-                comments=row['COMMENTS'])
+    conn = psycopg2.connect("dbname=greenpoint")
+    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    cur.execute("SELECT * FROM exchanges;")
+    for row in cur.fetchall():
+        yield Exchange(
+            mic=row['mic'],
+            operating_mic=row['operating_mic'],
+            name=row['name'],
+            country=row['country'],
+            country_code=row['country_code'],
+            city=row['city'],
+            comments=row['comments'])
 
 
 Exchanges = list(list_exchanges())

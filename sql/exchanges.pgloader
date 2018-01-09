@@ -1,0 +1,6 @@
+LOAD CSV
+     FROM 'ISO10383_MIC.csv' WITH ENCODING iso-8859-1 (country, country_code, mic, operating_mic, os, name, acronym, city, website, status_date, status, creation_date, comments)
+     INTO postgresql:///greenpoint?exchanges (mic, operating_mic, name, country, country_code, city, comments)
+     WITH truncate,
+          skip header = 1,
+          fields terminated by ',';

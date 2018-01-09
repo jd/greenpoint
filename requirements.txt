@@ -10,3 +10,4 @@ attrs
 tabulate
 colorama
 termcolor
+psycopg2
