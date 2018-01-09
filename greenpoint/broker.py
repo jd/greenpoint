@@ -98,11 +98,11 @@ class Fortuneo(object):
         return float(s.replace(",", ".").replace("\xa0", ""))
 
     _EXCHANGE_MAP = {
-        "euronext paris": instrument.get_exchange_by_mic("XPAR"),
-        "euronext bruxelles": instrument.get_exchange_by_mic("XBRU"),
-        "new york stock exchange": instrument.get_exchange_by_mic("XNYS"),
-        "lse foreign currency": instrument.get_exchange_by_mic("XLON"),
-        "euronext amsterdam": instrument.get_exchange_by_mic("XAMS"),
+        "euronext paris": "XPAR",
+        "euronext bruxelles": "XBRU",
+        "new york stock exchange": "XNYS",
+        "lse foreign currency": "XLON",
+        "euronext amsterdam": "XAMS",
     }
 
     @classmethod
@@ -148,7 +148,8 @@ class Fortuneo(object):
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-            instrument_kwargs['exchange'] = cls._EXCHANGE_MAP[exchange.lower()]
+            instrument_kwargs['exchange_mic'] = cls._EXCHANGE_MAP[
+                exchange.lower()]
         elif page.url.startswith("https://bourse.fortuneo.fr/trackers/"):
             # ETF
             caracts = tree.xpath(
@@ -176,7 +177,8 @@ class Fortuneo(object):
                     '//p[@class="digest-header-name-details"]/text()'
                 )[0].split("-")
             )
-            instrument_kwargs['exchange'] = cls._EXCHANGE_MAP[exchange.lower()]
+            instrument_kwargs['exchange_mic'] = cls._EXCHANGE_MAP[
+                exchange.lower()]
         elif page.url.startswith("https://bourse.fortuneo.fr/sicav-fonds/"):
             # Mutual funds
             cols = tree.xpath(
@@ -194,7 +196,7 @@ class Fortuneo(object):
             instrument_kwargs['ttf'] = False
             instrument_kwargs['type'] = instrument.InstrumentType.FUND
             instrument_kwargs['symbol'] = None
-            instrument_kwargs['exchange'] = None
+            instrument_kwargs['exchange_mic'] = None
         else:
             raise ValueError("Unable to find info for %s", name)
 

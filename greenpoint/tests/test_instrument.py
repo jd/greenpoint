@@ -12,7 +12,7 @@ def test_quotes_from_lesechos():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_lesechos()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
@@ -27,7 +27,7 @@ def test_quotes_from_lesechos():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_lesechos()
     assert list(quotes) == []
@@ -40,7 +40,7 @@ def test_quotes_from_boursorama():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_boursorama()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
@@ -55,7 +55,7 @@ def test_quotes_from_boursorama():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_boursorama()
     assert list(quotes) == []
@@ -68,7 +68,7 @@ def test_quotes_from_google():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_google()
     assert instrument.Quote(date=datetime.date(2017, 12, 20),
@@ -83,7 +83,7 @@ def test_quotes_from_google():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quotes = inst.fetch_quotes_from_google()
     assert list(quotes) == []
@@ -96,7 +96,7 @@ def test_quotes():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     inst.refresh_quotes()
     quotes = inst.quotes.values()
@@ -112,7 +112,7 @@ def test_quotes():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     inst.refresh_quotes()
     quotes = inst.quotes.values()
@@ -126,7 +126,7 @@ def test_save_load():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     inst.refresh_quotes()
     inst.save()
@@ -141,7 +141,7 @@ def test_live_quote_from_yahoo():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quote = inst.fetch_live_quote_from_yahoo()
     assert isinstance(quote, instrument.Quote)
@@ -153,7 +153,7 @@ def test_live_quote_from_yahoo():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quote = inst.fetch_live_quote_from_yahoo()
     assert quote is None
@@ -166,7 +166,7 @@ def test_quote_property():
         name="Figeac Aero",
         symbol="FGA",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quote = inst.quote
     assert isinstance(quote, instrument.Quote)
@@ -179,7 +179,7 @@ def test_quote_property():
         name="Invalid",
         symbol="FGAXX",
         currency="EUR",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     quote = inst.quote
     assert quote is None
@@ -191,7 +191,7 @@ def test_quote_property():
         name="Figeac Aero",
         symbol="FGA",
         currency="USD",
-        exchange=instrument.get_exchange_by_mic("XPAR"),
+        exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
     with pytest.raises(ValueError) as e:
         inst.quote

@@ -11,6 +11,7 @@ instruments:
   "L'OREAL": "https://bourse.fortuneo.fr/actions/cours-l-oreal-OR-FR0000120321-23"
   "SANOFI": "FR0000120578"
   "LVMH": "FR0000121014"
+  "SECHE ENVIRONNEM.": "https://bourse.fortuneo.fr/actions/cours-seche-environnem-SCHP-FR0000039109-23"
   "OCTO TECHNOLOGY":
     isin: FR0004157428
     type: stock
@@ -19,7 +20,7 @@ instruments:
     pea_pme: true
     ttf: false
     symbol: ALOCT
-    exchange: XPAR
+    exchange_mic: XPAR
     currency: EUR
   "KERLINK DS":
     isin: FR0013251287
@@ -29,7 +30,7 @@ instruments:
     pea_pme: false
     ttf: false
     symbol: KLKDS
-    exchange: XPAR
+    exchange_mic: XPAR
     currency: EUR
   "ILIAD": "FR0004035913"
   "DIRECT ENERGIE": "FR0004191674"

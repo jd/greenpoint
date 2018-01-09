@@ -171,40 +171,6 @@ def portfolio_show(broker):
     ))
 
 
-@main.group(name="instrument")
-def instrument_group():
-    pass
-
-
-@instrument_group.command(name="list")
-def instrument_list():
-    instruments = []
-    for f in os.listdir("data/instruments"):
-        isin = f.rsplit(".yaml", 1)[0]
-        inst = instrument.Instrument.load(isin=isin)
-        headers = list(map(str.capitalize, attr.asdict(inst).keys()))
-        values = []
-        for k, v in attr.asdict(inst).items():
-            if k == "exchange":
-                if v:
-                    values.append(v['name'])
-                else:
-                    values.append("?")
-            elif k == "quotes":
-                values.append(len(v))
-            elif k == "name":
-                values.append(v[:30])
-            else:
-                values.append(v)
-        instruments.append(values)
-
-    print(tabulate.tabulate(
-        instruments,
-        headers=headers,
-        tablefmt='fancy_grid', floatfmt=".2f",
-    ))
-
-
 if __name__ == '__main__':
     import sys
     sys.exit(main())

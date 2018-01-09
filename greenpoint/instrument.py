@@ -1,7 +1,6 @@
 import bisect
 import datetime
 import itertools
-import os.path
 import re
 
 import attr
@@ -132,12 +131,18 @@ class Exchange(object):
             return None
 
 
-def get_exchange_by_mic(mic):
+def get_cursor():
     conn = psycopg2.connect("dbname=greenpoint")
-    cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+    conn.set_session(autocommit=True)
+    return conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
+
+
+def get_exchange_by_mic(mic):
+    cur = get_cursor()
     cur.execute("SELECT * FROM exchanges WHERE mic = %s;", (mic,))
     row = cur.fetchone()
-    return Exchange(
+    if row:
+        return Exchange(
             mic=row['mic'],
             operating_mic=row['operating_mic'],
             name=row['name'],
@@ -145,12 +150,6 @@ def get_exchange_by_mic(mic):
             country_code=row['country_code'],
             city=row['city'],
             comments=row['comments'])
-
-
-def _get_exchange_by_mic_if_necessary(value):
-    if isinstance(value, Exchange):
-        return value
-    return get_exchange_by_mic(value)
 
 
 @attr.s(hash=True)
@@ -173,10 +172,10 @@ class Instrument(object):
         attr.validators.instance_of(bool)), cmp=False)
     ttf = attr.ib(validator=attr.validators.optional(
         attr.validators.instance_of(bool)), cmp=False)
-    exchange = attr.ib(
+    exchange_mic = attr.ib(
         validator=attr.validators.optional(
-            attr.validators.instance_of(Exchange)),
-        converter=attr.converters.optional(_get_exchange_by_mic_if_necessary),
+            attr.validators.instance_of(str)),
+        converter=attr.converters.optional(str.upper),
         cmp=False)
     currency = attr.ib(
         validator=attr.validators.optional(
@@ -186,6 +185,11 @@ class Instrument(object):
                      default=attr.Factory(lambda: QuoteList([])),
                      validator=attr.validators.optional(
                          attr.validators.instance_of(QuoteList)))
+
+    @property
+    def exchange(self):
+        if self.exchange_mic:
+            return get_exchange_by_mic(self.exchange_mic)
 
     @property
     def google_symbol(self):
@@ -210,25 +214,31 @@ class Instrument(object):
             return
         return self.symbol + yahoo_code
 
-    @staticmethod
-    def get_path(isin):
-        return os.path.join("instruments", isin.upper())
-
-    @property
-    def path(self):
-        return self.get_path(self.isin)
-
     def save(self):
-        return storage.save(self.path, self)
+        cur = get_cursor()
+        d = attr.asdict(self)
+        d['exchange'] = self.exchange_mic
+        d['type'] = d['type'].name.lower()
+        cur.execute(
+            "INSERT INTO instruments "
+            "(isin, name, type, symbol, pea, pea_pme, ttf, exchange_mic, currency) "
+            "VALUES (%(isin)s, %(name)s, %(type)s, %(symbol)s, %(pea)s, "
+            "%(pea_pme)s, %(ttf)s, %(exchange)s, %(currency)s) "
+            "ON CONFLICT ON CONSTRAINT instruments_pkey "
+            "DO NOTHING", d)
 
     @classmethod
     def load(cls, **kwargs):
-        try:
-            return storage.load(cls.get_path(kwargs['isin']))
-        except FileNotFoundError:
-            i = cls(**kwargs)
-            i.save()
-            return i
+        cur = get_cursor()
+        cur.execute("SELECT * FROM instruments WHERE isin = %s",
+                    (kwargs['isin'],))
+        d = cur.fetchone()
+        if d:
+            return cls(**d)
+
+        i = cls(**kwargs)
+        i.save()
+        return i
 
     def fetch_quotes_from_boursorama(self, start=None, stop=None):
         r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
