@@ -132,12 +132,12 @@ class Exchange(object):
             return None
 
 
-def list_exchanges():
+def get_exchange_by_mic(mic):
     conn = psycopg2.connect("dbname=greenpoint")
     cur = conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-    cur.execute("SELECT * FROM exchanges;")
-    for row in cur.fetchall():
-        yield Exchange(
+    cur.execute("SELECT * FROM exchanges WHERE mic = %s;", (mic,))
+    row = cur.fetchone()
+    return Exchange(
             mic=row['mic'],
             operating_mic=row['operating_mic'],
             name=row['name'],
@@ -145,14 +145,6 @@ def list_exchanges():
             country_code=row['country_code'],
             city=row['city'],
             comments=row['comments'])
-
-
-Exchanges = list(list_exchanges())
-ExchangesMICMap = {e.mic: e for e in Exchanges}
-
-
-def get_exchange_by_mic(mic):
-    return ExchangesMICMap[mic]
 
 
 def _get_exchange_by_mic_if_necessary(value):
