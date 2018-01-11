@@ -1,3 +1,4 @@
+import asyncio
 import datetime
 
 import pytest
@@ -128,9 +129,12 @@ def test_save_load():
         currency="EUR",
         exchange_mic="XPAR",
         pea=None, pea_pme=None, ttf=None)
-    inst.refresh_quotes()
-    inst.save()
-    inst2 = instrument.Instrument.load(isin="FR0011665280")
+    loop = asyncio.get_event_loop()
+    loop.run_until_complete(inst.save())
+    loop.run_until_complete(inst.refresh_quotes())
+    loop.run_until_complete(inst.save())
+    inst2 = loop.run_until_complete(
+        instrument.Instrument.load(isin="FR0011665280"))
     assert inst == inst2
 
 

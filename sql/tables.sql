@@ -19,5 +19,35 @@ CREATE TABLE instruments (
        pea_pme bool,
        ttf bool,
        exchange_mic text REFERENCES exchanges(mic),
-       currency text CHECK (upper(currency) = currency) NOT NULL
+       currency text CHECK (upper(currency) = currency) NOT NULL,
+       is_alive bool DEFAULT true NOT NULL,
+       latest_quote float,
+       latest_quote_time timestamp with time zone
 );
+
+CREATE TABLE quotes (
+       instrument_isin text REFERENCES instruments(isin) NOT NULL,
+       date date NOT NULL,
+       open numeric(15, 6),
+       close numeric(15, 6),
+       high numeric(15, 6),
+       low numeric(15, 6),
+       volume integer,
+       UNIQUE (instrument_isin, date)
+);
+
+CREATE TYPE operation_type AS ENUM ('trade', 'dividend', 'tax');
+
+CREATE TABLE operations (
+       portfolio_name text NOT NULL,
+       instrument_isin text REFERENCES instruments(isin) NOT NULL,
+       type operation_type NOT NULL,
+       date date NOT NULL,
+       quantity numeric(15, 6) NOT NULL,
+       price numeric(15, 6) NOT NULL,
+       fees numeric(15, 6) NOT NULL,
+       taxes numeric(15, 6) NOT NULL,
+       currency text NOT NULL
+);
+
+-- SELECT * FROM (select portfolio_name, instrument_isin, instruments.name, sum(quantity) AS quantity from operations, instruments WHERE operations.type = 'trade' AND instruments.isin = operations.instrument_isin GROUP BY (portfolio_name, instrument_isin, instruments.name)) AS pfl WHERE pfl.quantity != 0 ORDER BY (portfolio_name, name);

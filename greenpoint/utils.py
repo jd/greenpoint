@@ -1,5 +1,7 @@
 import itertools
 
+import asyncpg.pool
+
 from dateutil import tz
 
 import iso8601
@@ -12,6 +14,14 @@ def grouper(iterable, n):
         if not chunk:
             return
         yield chunk
+
+
+POOL = asyncpg.pool.create_pool("postgresql:///greenpoint", max_size=50)
+
+
+async def get_db():
+    await POOL
+    return POOL
 
 
 LOCAL_TIMEZONE = tz.gettz()

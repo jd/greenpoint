@@ -1,7 +1,7 @@
 import datetime
 import os.path
 
-import cachetools.func
+import cachetools
 
 import daiquiri
 
@@ -34,9 +34,12 @@ class Fortuneo(object):
 
     with open(os.path.join(os.path.dirname(__file__),
                            "data", "fortuneo.yaml"), "r") as f:
-        CACHE = yaml.load(f.read())
+        PRELOAD = yaml.load(f.read())
 
-    def __init__(self, conf):
+    CACHE = cachetools.TTLCache(maxsize=4096, ttl=3600 * 24)
+
+    def __init__(self, name, conf):
+        self.name = name
         self.session = requests.Session()
         login = self.session.post(self.ACCESS_PAGE,
                                   data={"login": conf['login'],
@@ -47,28 +50,13 @@ class Fortuneo(object):
         self.account_type = conf.get('account', '').lower()
         if self.account_type == 'pea-pme':
             self.account_type = 'ppe'  # Fortuneo name
+        account_id = tree.xpath(
+            '//div[@class="%s compte"]/a' % self.account_type
+        )[0].get('rel')
         if self.account_type in ('pea', 'ppe'):
-            account_id = tree.xpath(
-                '//div[@class="%s compte"]/a' % self.account_type
-            )[0].get('rel')
-            self.cash_history_page = (
-                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s/"
-                "historique/historique-especes.jsp?ca=%s" % (
-                    self.account_type, account_id
-                )
-            )
             self.history_page = self.HISTORY_PAGE % (self.account_type,
                                                      account_id)
         elif self.account_type == 'ord':
-            account_esp_id = tree.xpath(
-                '//div[@class="esp compte"]/a')[0].get('rel')
-            account_id = tree.xpath(
-                '//div[@class="ord compte"]/a')[0].get('rel')
-            self.cash_history_page = (
-                "https://mabanque.fortuneo.fr/fr/prive/mes-comptes/"
-                "compte-especes/consulter-situation/consulter-solde.jsp?ca=%s"
-                % account_esp_id
-            )
             self.history_page = self.HISTORY_PAGE % ("compte-titres-pea",
                                                      account_id)
         else:
@@ -78,10 +66,10 @@ class Fortuneo(object):
     def _translate_op(operation):
         op = operation.lower()
         if op in ("vente comptant", "rachat part sicav externe"):
-            return portfolio.OperationType.SELL
+            return "sell"
         elif op in ("achat comptant", "script-parts sicav externe",
                     "Dépôt de titres vifs"):
-            return portfolio.OperationType.BUY
+            return "buy"
         elif op.startswith("encaissement coupons"):
             return portfolio.OperationType.DIVIDEND
         elif op.startswith("taxe transac"):
@@ -106,16 +94,21 @@ class Fortuneo(object):
     }
 
     @classmethod
-    @cachetools.func.ttl_cache(maxsize=4096, ttl=3600 * 24)
-    def _get_instrument_info(cls, session, name):
+    async def _get_instrument_info(cls, session, name):
+        # Use a decorator
+        # https://github.com/tkem/cachetools/issues/92
+
+        if name in cls.CACHE:
+            return cls.CACHE[name]
+
         LOG.debug("Fetching instrument %s", name)
 
-        info = cls.CACHE.get('instruments', {}).get(name)
+        info = cls.PRELOAD.get('instruments', {}).get(name)
         if info:
             LOG.debug("Instrument %s pre-configured", name)
             # If it's not a string, return the override
             if not isinstance(info, str):
-                return instrument.Instrument.load(**info)
+                return await instrument.Instrument.load(**info)
             if info.startswith("http://") or info.startswith("https://"):
                 url = info
             else:
@@ -204,8 +197,9 @@ class Fortuneo(object):
             '//div[@class="digest-header-number"]/span/text()'
         )[0].rsplit(" ", 1)[-1]
 
-        data = instrument.Instrument.load(**instrument_kwargs)
+        data = await instrument.Instrument.load(**instrument_kwargs)
         LOG.debug("Found info %s", data)
+        cls.CACHE[name] = data
         return data
 
     @staticmethod
@@ -217,55 +211,8 @@ class Fortuneo(object):
             end = start - datetime.timedelta(days=1)
             start = end - step
 
-    def list_transactions(self):
+    async def list_transactions(self):
         txs = []
-
-        for start, end in self._iter_on_time():
-            if self.account_type == "ord":
-                page = self.session.post(
-                    self.cash_history_page,
-                    data={
-                        "dateRechercheDebut": start.strftime("%d/%m/%Y"),
-                        "dateRechercheFin": end.strftime("%d/%m/%Y"),
-                        "nbrEltsParPage": 1000,
-                    },
-                    cookies=self.cookies)
-            else:
-                page = self.session.post(
-                    self.cash_history_page,
-                    data={
-                        "offset": 0,
-                        "dateDebut": start.strftime("%d/%m/%Y"),
-                        "dateFin": end.strftime("%d/%m/%Y"),
-                        "nbResultats": 1000,
-                    },
-                    cookies=self.cookies)
-
-            tree = html.fromstring(page.content)
-
-            history = tree.xpath(
-                '//table[@id="tabHistoriqueOperations"]/tbody/tr/td')
-
-            if len(history) == 0:
-                break
-
-            for _, date_op, date_value, label, debit, credit in map(
-                    lambda t: tuple(map(lambda x: x.text.strip(), t)),
-                    utils.grouper(history, 6)):
-                if credit:
-                    amount = self._to_float(credit)
-                    operation = portfolio.CashOperationType.DEPOSIT
-                else:
-                    amount = self._to_float(debit)
-                    operation = portfolio.CashOperationType.WITHDRAWAL
-                txs.append(portfolio.CashOperation(
-                    type=operation,
-                    date=datetime.datetime.strptime(
-                        date_op, "%d/%m/%Y").date(),
-                    amount=amount,
-                    # Currency is always EUR anyway
-                    currency="EUR",
-                ))
 
         for start, end in self._iter_on_time():
             page = self.session.post(
@@ -294,40 +241,50 @@ class Fortuneo(object):
                     continue
 
                 qty = self._to_float(qty)
+
+                if op in ("buy", "sell"):
+                    if op == "sell":
+                        qty = - qty
+                    op = portfolio.OperationType.TRADE
+
                 taxes = 0.0
+                final_fees = 0.0
 
                 if op == portfolio.OperationType.DIVIDEND:
-                    ppu = self._to_float(net) / qty
-                    # There is no fees, it's just the change, so use the net
-                    # amount to get it
-                    fees = 0.0
+                    if currency == "EUR":
+                        # Fees are taxes actually
+                        taxes = self._to_float(fees)
+                        ppu = abs(self._to_float(raw)) / qty
+                    else:
+                        # There is no fees, it's just the change and
+                        # prelevement a la source sometimes, so use the net
+                        # amount to get something interesting
+                        ppu = abs(self._to_float(net)) / qty
                 elif op == portfolio.OperationType.TAX:
                     taxes = self._to_float(fees)
                     ppu = 0.0
-                    fees = 0.0
                 else:
                     if currency != "EUR":
-                        # Fees is change + fees…
+                        # Fees is change + fees… ignore
                         ppu = abs(self._to_float(net)) / qty
-                        fees = 0.0
                     else:
                         ppu = self._to_float(ppu)
-                        fees = self._to_float(fees)
+                        final_fees = self._to_float(fees)
 
                 try:
-                    inst = self._get_instrument_info(self.session, inst)
+                    inst = await self._get_instrument_info(self.session, inst)
                 except ValueError:
                     LOG.warning("Ignoring unknown instrument `%s'", inst)
                     continue
 
                 txs.append(portfolio.Operation(
-                    instrument=inst,
+                    instrument_isin=inst.isin,
                     type=op,
                     date=datetime.datetime.strptime(
                         date, "%d/%m/%Y").date(),
                     quantity=qty,
                     price=ppu,
-                    fees=fees,
+                    fees=final_fees,
                     taxes=taxes,
                     # Currency is always EUR anyway
                     currency="EUR",

@@ -1,24 +1,21 @@
-import bisect
+import asyncio
 import datetime
 import itertools
 import re
+
+import aiohttp
 
 import attr
 
 import enum
 
-import cachetools.func
-
 import daiquiri
+
+import iso8601
 
 from lxml import etree
 
-import requests
-
-import psycopg2
-import psycopg2.extras
-
-from greenpoint import storage
+from greenpoint import utils
 
 
 LOG = daiquiri.getLogger(__name__)
@@ -26,45 +23,19 @@ LOG = daiquiri.getLogger(__name__)
 ONE_DAY = datetime.timedelta(days=1)
 
 
-class QuoteList(dict):
-    def __init__(self, quotes):
-        super(QuoteList, self).__init__({q.date: q for q in quotes})
-
-    def __getitem__(self, key):
-        if isinstance(key, int):
-            keys = sorted(self.keys())
-            if keys:
-                return self[keys[key]]
-            raise KeyError(key)
-        elif isinstance(key, slice):
-            keys = sorted(self.keys())
-            if not keys:
-                raise KeyError(key)
-            if isinstance(key.start, datetime.date):
-                key = slice(bisect.bisect_left(keys, key.start),
-                            key.stop,
-                            key.step)
-            if isinstance(key.stop, datetime.date):
-                key = slice(key.start,
-                            bisect.bisect_right(keys, key.stop),
-                            key.step)
-            return [self[v] for v in keys[key]]
-        return super(QuoteList, self).__getitem__(key)
-
-
 @attr.s(slots=True, frozen=True)
 class Quote(object):
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
     open = attr.ib(validator=attr.validators.optional(  # noqa
-        attr.validators.instance_of(float)))
+        attr.validators.instance_of(float)), hash=False)
     close = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(float)))
+        attr.validators.instance_of(float)), hash=False)
     high = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(float)))
+        attr.validators.instance_of(float)), hash=False)
     low = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(float)))
+        attr.validators.instance_of(float)), hash=False)
     volume = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(int)))
+        attr.validators.instance_of(int)), hash=False)
 
 
 class InstrumentType(enum.Enum):
@@ -79,77 +50,27 @@ class InstrumentType(enum.Enum):
         return cls[value.upper()]
 
 
-@attr.s(frozen=True)
-class Exchange(object):
-    mic = attr.ib(validator=attr.validators.instance_of(str),
-                  converter=str.upper)
-    operating_mic = attr.ib(validator=attr.validators.instance_of(str),
-                            converter=str.upper,
-                            cmp=False)
-    name = attr.ib(validator=attr.validators.instance_of(str), cmp=False)
-    country = attr.ib(validator=attr.validators.instance_of(str), cmp=False)
-    country_code = attr.ib(validator=attr.validators.instance_of(str),
-                           cmp=False)
-    city = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)), cmp=False)
-    comments = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)), cmp=False)
-
-    # Source: https://www.google.com/googlefinance/disclaimer/
-    GOOGLE_MIC_MAP = {
-        "XPAR": "EPA",
-        "XBRU": "EBR",
-        "XAMS": "AMS",
-        "XLON": "LON",
-        "XTSE": "CVE",
-        "XNAS": "NASDAQ",
-        "XNYS": "NYSE",
-        "ARCX": "NYSEARCA",
-        "XASE": "NYSEAMERICAN",
-    }
-
-    @property
-    def google_code(self):
-        try:
-            return self.GOOGLE_MIC_MAP[self.mic]
-        except IndexError:
-            return None
-
-    YAHOO_MIC_MAP = {
-        "XPAR": ".PA",
-        "XBRU": ".BR",
-        "XAMS": ".AS",
-        "XLON": ".L",
-        "XNYS": "",
-    }
-
-    @property
-    def yahoo_code(self):
-        try:
-            return self.YAHOO_MIC_MAP[self.mic]
-        except IndexError:
-            return None
+# Source: https://www.google.com/googlefinance/disclaimer/
+GOOGLE_MIC_MAP = {
+    "XPAR": "EPA",
+    "XBRU": "EBR",
+    "XAMS": "AMS",
+    "XLON": "LON",
+    "XTSE": "CVE",
+    "XNAS": "NASDAQ",
+    "XNYS": "NYSE",
+    "ARCX": "NYSEARCA",
+    "XASE": "NYSEAMERICAN",
+}
 
 
-def get_cursor():
-    conn = psycopg2.connect("dbname=greenpoint")
-    conn.set_session(autocommit=True)
-    return conn.cursor(cursor_factory=psycopg2.extras.DictCursor)
-
-
-def get_exchange_by_mic(mic):
-    cur = get_cursor()
-    cur.execute("SELECT * FROM exchanges WHERE mic = %s;", (mic,))
-    row = cur.fetchone()
-    if row:
-        return Exchange(
-            mic=row['mic'],
-            operating_mic=row['operating_mic'],
-            name=row['name'],
-            country=row['country'],
-            country_code=row['country_code'],
-            city=row['city'],
-            comments=row['comments'])
+YAHOO_MIC_MAP = {
+    "XPAR": ".PA",
+    "XBRU": ".BR",
+    "XAMS": ".AS",
+    "XLON": ".L",
+    "XNYS": "",
+}
 
 
 @attr.s(hash=True)
@@ -181,110 +102,137 @@ class Instrument(object):
         validator=attr.validators.optional(
             attr.validators.instance_of(str)),
         converter=attr.converters.optional(str.upper))
-    quotes = attr.ib(init=False, cmp=False, repr=False,
-                     default=attr.Factory(lambda: QuoteList([])),
-                     validator=attr.validators.optional(
-                         attr.validators.instance_of(QuoteList)))
+    latest_quote = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(float)),
+        default=None)
+    latest_quote_time = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(datetime.datetime)),
+        default=None)
+    is_alive = attr.ib(
+        validator=attr.validators.instance_of(bool),
+        default=True)
 
-    @property
-    def exchange(self):
-        if self.exchange_mic:
-            return get_exchange_by_mic(self.exchange_mic)
+    def __str__(self):
+        if self.symbol:
+            return "<%s%s: %s (%s)>" % (
+                self.symbol,
+                ("@" + self.exchange_mic) if self.exchange_mic else "",
+                self.name,
+                self.type.name)
+        else:
+            return "<%s (%s)>" % (self.name, self.type.name)
 
     @property
     def google_symbol(self):
-        if self.exchange is None:
+        if self.exchange_mic is None:
             return
-        google_code = self.exchange.google_code
+        google_code = GOOGLE_MIC_MAP.get(self.exchange_mic)
         if google_code is None:
             return
         return google_code + ":" + self.symbol
 
     @property
     def yahoo_symbol(self):
-        if self.exchange is None:
+        if self.exchange_mic is None:
             if self.type == InstrumentType.FUND:
                 # NOTE This is probably wrong, but currently we only support
                 # fund that are traded in France, so that works for Yahoo.
                 return self.isin + ".PA"
             else:
                 return
-        yahoo_code = self.exchange.yahoo_code
+        yahoo_code = YAHOO_MIC_MAP.get(self.exchange_mic)
         if yahoo_code is None:
             return
         return self.symbol + yahoo_code
 
-    def save(self):
-        cur = get_cursor()
-        d = attr.asdict(self)
-        d['exchange'] = self.exchange_mic
-        d['type'] = d['type'].name.lower()
-        cur.execute(
+    async def save(self):
+        cur = await utils.get_db()
+        await cur.execute(
             "INSERT INTO instruments "
-            "(isin, name, type, symbol, pea, pea_pme, ttf, exchange_mic, currency) "
-            "VALUES (%(isin)s, %(name)s, %(type)s, %(symbol)s, %(pea)s, "
-            "%(pea_pme)s, %(ttf)s, %(exchange)s, %(currency)s) "
+            "(isin, name, type, symbol, pea, pea_pme, ttf, "
+            "exchange_mic, currency) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
             "ON CONFLICT ON CONSTRAINT instruments_pkey "
-            "DO NOTHING", d)
-
-    @classmethod
-    def load(cls, **kwargs):
-        cur = get_cursor()
-        cur.execute("SELECT * FROM instruments WHERE isin = %s",
-                    (kwargs['isin'],))
-        d = cur.fetchone()
-        if d:
-            return cls(**d)
-
-        i = cls(**kwargs)
-        i.save()
-        return i
-
-    def fetch_quotes_from_boursorama(self, start=None, stop=None):
-        r = requests.get("http://www.boursorama.com/recherche/index.phtml?q=" +
-                         self.isin)
-        try:
-            symbol = r.url.split("symbole=")[1]
-        except IndexError:
-            return
-
-        r = requests.get(
-            "http://www.boursorama.com/graphiques/quotes.phtml?s%5B0%5D=" +
-            symbol +
-            "&c=eJxNUEFuwyAQzFv22BPYbRqWYw9RpapNZTV"
-            "SThaxabwqDhHgWlHkvxdsXCKVE7Mz"
-            "s8ygUODNY4FALUiPzwjH8luINU_oCWGkNnQgC"
-            "TeMxckaodN06kIaiYJli2p-9HleUFwiV"
-            "PttugmEwZmdcqr3IBXy9BBHuAPC5OYMge1YPIf"
-            "qUICcpjhLqs6O1dD3yl1BHpFnKZ1bal"
-            "Sw7v-WDywfEb6o3jp16aipPwcbtK9f7-J6b83"
-            "Qa4g9b3Or1cNq6Rv7_C5cXASbmQgUjM5"
-            "cXPYtqVLRwRgdXqyx7k2f5so5W4zckr8YdX3Xo0-_w-T0B0RLa1wn"
+            "DO NOTHING",
+            self.isin, self.name, self.type.name.lower(),
+            self.symbol, self.pea, self.pea_pme, self.ttf, self.exchange_mic,
+            self.currency,
         )
 
-        for point in r.json()['dataSets'][0]['dataProvider']:
-            d = datetime.datetime.strptime(
-                point['d'][:-6], "%d/%m/%Y").date()
-            if start is not None and d < start:
-                continue
-            if stop is not None and d > stop:
-                continue
-            yield Quote(
-                date=d,
-                open=float(point['o']),
-                close=float(point['c']),
-                high=float(point['h']),
-                low=float(point['l']),
-                volume=point['v']
-            )
-
-    def fetch_quotes_from_lesechos(self, start=None, stop=None):
-        if self.exchange:
-            exchange = self.exchange.operating_mic
-        elif self.type == InstrumentType.FUND:
-            exchange = "WMORN"  # Morningstar fund
+    @classmethod
+    async def load(cls, **kwargs):
+        cur = await utils.get_db()
+        if 'isin' in kwargs:
+            result = await cur.fetchrow(
+                "SELECT * FROM instruments WHERE isin = $1",
+                kwargs['isin'])
+        elif 'name' in kwargs:
+            result = await cur.fetchrow(
+                "SELECT * FROM instruments WHERE name ILIKE $1",
+                "%" + kwargs['name'] + "%")
         else:
-            return
+            result = None
+
+        if result:
+            return cls(**result)
+
+        i = cls(**kwargs)
+        await i.save()
+        return i
+
+    async def fetch_quotes_from_boursorama(self, session,
+                                           start=None, stop=None):
+        quotes = set()
+        async with session.get(
+                "http://www.boursorama.com/recherche/index.phtml?q=" +
+                self.isin) as r:
+            try:
+                symbol = r.url.split("symbole=")[1]
+            except IndexError:
+                return quotes
+
+        async with session.get(
+                "http://www.boursorama.com/graphiques/quotes.phtml?s%5B0%5D=" +
+                symbol +
+                "&c=eJxNUEFuwyAQzFv22BPYbRqWYw9RpapNZTV"
+                "SThaxabwqDhHgWlHkvxdsXCKVE7Mz"
+                "s8ygUODNY4FALUiPzwjH8luINU_oCWGkNnQgC"
+                "TeMxckaodN06kIaiYJli2p-9HleUFwiV"
+                "PttugmEwZmdcqr3IBXy9BBHuAPC5OYMge1YPIf"
+                "qUICcpjhLqs6O1dD3yl1BHpFnKZ1bal"
+                "Sw7v-WDywfEb6o3jp16aipPwcbtK9f7-J6b83"
+                "Qa4g9b3Or1cNq6Rv7_C5cXASbmQgUjM5"
+                "cXPYtqVLRwRgdXqyx7k2f5so5W4zckr8YdX3Xo0-_w-T0B0RLa1wn"
+        ) as r:
+            json = await r.json()
+            for point in json['dataSets'][0]['dataProvider']:
+                d = datetime.datetime.strptime(
+                    point['d'][:-6], "%d/%m/%Y").date()
+                if start is not None and d < start:
+                    continue
+                if stop is not None and d > stop:
+                    continue
+                quotes.add(Quote(
+                    date=d,
+                    open=float(point['o']),
+                    close=float(point['c']),
+                    high=float(point['h']),
+                    low=float(point['l']),
+                    volume=point['v']
+                ))
+
+        return quotes
+
+    async def fetch_quotes_from_lesechos(self, session, start=None, stop=None):
+        quotes = set()
+        exchange = self.exchange_mic
+        if not exchange:
+            if self.type == InstrumentType.FUND:
+                exchange = "WMORN"  # Morningstar fund
+            else:
+                return quotes
 
         if start is None:
             start = datetime.date(2000, 1, 1)
@@ -294,16 +242,19 @@ class Instrument(object):
         start = start.strftime("%Y%m%d")
         stop = stop.strftime("%Y%m%d")
 
-        r = requests.get("https://lesechos-bourse-fo-cdn.wlb.aw.atos.net" +
-                         "/FDS/history.xml?entity=echos&view=ALL" +
-                         "&code=" + self.isin +
-                         "&codification=ISIN&adjusted=true&base100=false" +
-                         "&exchange=" + exchange +
-                         "&sessWithNoQuot=false" +
-                         "&beginDate=" + start +
-                         "&endDate=" + stop +
-                         "&computeVar=true")
-        xml = etree.fromstring(r.content)
+        async with session.get(
+                "https://lesechos-bourse-fo-cdn.wlb.aw.atos.net" +
+                "/FDS/history.xml?entity=echos&view=ALL" +
+                "&code=" + self.isin +
+                "&codification=ISIN&adjusted=true&base100=false" +
+                "&exchange=" + exchange +
+                "&sessWithNoQuot=false" +
+                "&beginDate=" + start +
+                "&endDate=" + stop +
+                "&computeVar=true") as r:
+            content = await r.read()
+
+        xml = etree.fromstring(content)
         for history in xml.xpath("//historyResponse/history/historyDt"):
             kwargs = {
                 "date": datetime.datetime.strptime(
@@ -315,13 +266,15 @@ class Instrument(object):
                                ("lowPx", "low"),
                                ("qty", "volume")):
                 v = history.get(k)
-                if v is not None:
-                    v = float(v)
-                    if kwarg == "volume":
-                        v = int(v)
+                if v is None:
+                    break
+                v = float(v)
+                if kwarg == "volume":
+                    v = int(v)
                 kwargs[kwarg] = v
-
-            yield Quote(**kwargs)
+            else:
+                quotes.add(Quote(**kwargs))
+        return quotes
 
     # <td class="lm">Apr 21, 2017
     # <td class="rgt">58.40
@@ -337,20 +290,23 @@ class Instrument(object):
                                     "<td class=\"rgt\">(.+)\n"
                                     "<td class=\"rgt rm\">(.+)\n")
 
-    def fetch_quotes_from_google(self, start=None, stop=None):
-        if self.google_symbol is None:
+    async def fetch_quotes_from_google(self, session, start=None, stop=None):
+        quotes = set()
+        google_symbol = self.google_symbol
+        if google_symbol is None:
             LOG.warning("No Google code for %r, cannot fetch quotes", self)
-            return
+            return quotes
 
         for index in itertools.count(0, 200):
-            r = requests.get(
-                "https://finance.google.com/finance/historical"
-                "?q=%s&num=200&start=%d"
-                % (self.google_symbol, index))
+            async with session.get(
+                    "https://finance.google.com/finance/historical"
+                    "?q=%s&num=200&start=%d"
+                    % (google_symbol, index)) as r:
+                text = await r.text()
 
-            results = list(self._GOOGLE_FINANCE_RE.finditer(r.text))
+            results = list(self._GOOGLE_FINANCE_RE.finditer(text))
             if not len(results):
-                return
+                return quotes
 
             for found in results:
                 date = datetime.datetime.strptime(
@@ -358,7 +314,7 @@ class Instrument(object):
                 if start is not None and date < start:
                     # Results are ordered descending
                     # As soon as a date is before the start, we can stop
-                    return
+                    break
                 if stop is not None and date > stop:
                     continue
                 values = []
@@ -369,14 +325,18 @@ class Instrument(object):
                     v = float(v.replace(",", ""))
                     values.append(v)
                 else:
-                    yield Quote(
-                        date=date,
-                        open=values[0],
-                        high=values[1],
-                        low=values[2],
-                        close=values[3],
-                        volume=int(values[4]),
+                    quotes.add(
+                        Quote(
+                            date=date,
+                            open=values[0],
+                            high=values[1],
+                            low=values[2],
+                            close=values[3],
+                            volume=int(values[4]),
+                        )
                     )
+
+        return quotes
 
     QUOTES_PROVIDERS = {
         "boursorama": fetch_quotes_from_boursorama,
@@ -384,34 +344,70 @@ class Instrument(object):
         "google": fetch_quotes_from_google,
     }
 
-    def refresh_quotes(self, start=None, stop=None):
+    async def refresh_quotes(self, start=None, stop=None):
         """Get quotes from all available providers and merge them.
 
         :param start: Timestamp to start at (included)
         :param stop: Timestamp to stop at (included)
         """
-        quotes = []
-        for func in self.QUOTES_PROVIDERS.values():
-            quotes.extend(func(self, start, stop))
-        self.quotes = QuoteList(quotes)
-        self.save()
+        cur = await utils.get_db()
+        new_quotes = set()
+        async with aiohttp.ClientSession() as session:
+            futs = [asyncio.ensure_future(func(self, session, start, stop))
+                    for func in self.QUOTES_PROVIDERS.values()]
+            for fut in futs:
+                new_quotes.update(await asyncio.wait_for(fut, None))
+        await cur.executemany(
+            "INSERT INTO quotes "
+            "(instrument_isin, date, open, close, high, low, volume) "
+            "VALUES($1, $2, $3, $4, $5, $6, $7) "
+            "ON CONFLICT ON CONSTRAINT quotes_instrument_isin_date_key "
+            "DO UPDATE SET "
+            "open = COALESCE(quotes.open, excluded.open), "
+            "close = COALESCE(quotes.close, excluded.close), "
+            "high = COALESCE(quotes.high, excluded.high), "
+            "low = COALESCE(quotes.low, excluded.low), "
+            "volume = COALESCE(quotes.volume, excluded.volume)",
+            ((self.isin, quote.date, quote.open, quote.close,
+              quote.high, quote.low, quote.volume)
+             for quote in new_quotes),
+        )
 
-    def fetch_live_quote_from_yahoo(self):
-        if self.yahoo_symbol is None:
-            LOG.warning("No Yahoo code for %r, cannot fetch quotes", self)
+    async def refresh_live_quote(self):
+        async with aiohttp.ClientSession() as session:
+            ret = await self.fetch_live_quote_from_yahoo(session)
+            try:
+                ts, quote = ret
+            except TypeError:
+                LOG.info("Unable to find live quote for %s", self)
+                return
+            conn = await utils.get_db()
+            await conn.execute(
+                "UPDATE instruments "
+                "SET latest_quote = $1, latest_quote_time = $2 "
+                "WHERE isin = $3",
+                quote, ts, self.isin)
+
+    async def fetch_live_quote_from_yahoo(self, session):
+        yahoo_symbol = self.yahoo_symbol
+        if yahoo_symbol is None:
+            LOG.warning("No Yahoo code for %s, cannot fetch quotes", self)
             return
 
-        r = requests.get("https://query1.finance.yahoo.com/v7/finance/quote?"
-                         "lang=en-US&region=US&corsDomain=finance.yahoo.com"
-                         "&fields=currency,"
-                         "regularMarketDayHigh,"
-                         "regularMarketDayLow,"
-                         "regularMarketOpen,"
-                         "regularMarketPrice,"
-                         "regularMarketTime,"
-                         "regularMarketVolume"
-                         "&symbols=" + self.yahoo_symbol)
-        result = r.json()['quoteResponse']['result']
+        async with session.get(
+                "https://query1.finance.yahoo.com/v7/finance/quote?"
+                "lang=en-US&region=US&corsDomain=finance.yahoo.com"
+                "&fields=currency,"
+                "regularMarketDayHigh,"
+                "regularMarketDayLow,"
+                "regularMarketOpen,"
+                "regularMarketPrice,"
+                "regularMarketTime,"
+                "regularMarketVolume"
+                "&symbols=" + yahoo_symbol) as r:
+            json = await r.json()
+
+        result = json['quoteResponse']['result']
         if not len(result):
             return
         result = result[0]
@@ -423,23 +419,24 @@ class Instrument(object):
                 % (currency, self.currency)
             )
         # Safe guard
-        if 'regularMarketOpen' not in result:
-            return
-        return Quote(
-            date=datetime.datetime.utcfromtimestamp(
-                result['regularMarketTime']).date(),
-            open=result['regularMarketOpen'],
-            close=result['regularMarketPrice'],
-            low=result['regularMarketDayLow'],
-            high=result['regularMarketDayHigh'],
-            volume=result['regularMarketVolume'],
-        )
+        if 'regularMarketOpen' in result:
+            return (datetime.datetime.utcfromtimestamp(
+                result['regularMarketTime']).replace(tzinfo=iso8601.UTC),
+                    result['regularMarketPrice'])
 
-    @property
-    @cachetools.func.ttl_cache(maxsize=8192, ttl=60)
-    def quote(self):
-        quote = self.fetch_live_quote_from_yahoo()
-        if quote is None:
-            if self.quotes:
-                return self.quotes[sorted(self.quotes.keys())[-1]]
-        return quote
+        # Not used anymore because Quote wants a date and we use datetime
+        # return Quote(
+        #     date=datetime.datetime.utcfromtimestamp(
+        #         result['regularMarketTime']).date(),
+        #     open=result['regularMarketOpen'],
+        #     close=result['regularMarketPrice'],
+        #     low=result['regularMarketDayLow'],
+        #     high=result['regularMarketDayHigh'],
+        #     volume=result['regularMarketVolume'],
+        # )
+
+    @classmethod
+    async def list_instruments(cls):
+        cur = await utils.get_db()
+        rows = await cur.fetch("SELECT * FROM instruments")
+        return [cls(**row) for row in rows]

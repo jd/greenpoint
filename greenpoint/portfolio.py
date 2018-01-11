@@ -1,41 +1,28 @@
 import datetime
+import enum
 import itertools
 import operator
 
 import attr
-import enum
 
 import collections
 
 from greenpoint import instrument
-
-
-class CashOperationType(enum.Enum):
-    WITHDRAWAL = "withdrawal"
-    DEPOSIT = "deposit"
-
-
-@attr.s(frozen=True)
-class CashOperation(object):
-    type = attr.ib(validator=attr.validators.instance_of(CashOperationType))
-    date = attr.ib(validator=attr.validators.instance_of(datetime.date))
-    amount = attr.ib(validator=attr.validators.instance_of(float))
-    currency = attr.ib(validator=attr.validators.optional(
-        attr.validators.instance_of(str)),
-                       converter=attr.converters.optional(str.upper))
+from greenpoint import utils
 
 
 class OperationType(enum.Enum):
-    BUY = "buy"
-    SELL = "sell"
+    TRADE = "trade"
     DIVIDEND = "dividend"
     TAX = "tax"
 
 
 @attr.s(frozen=True)
 class Operation(object):
-    instrument = attr.ib(validator=attr.validators.instance_of(
-        instrument.Instrument))
+    instrument_isin = attr.ib(
+        validator=attr.validators.optional(
+            attr.validators.instance_of(str)),
+        converter=attr.converters.optional(str.upper))
     type = attr.ib(validator=attr.validators.instance_of(OperationType))
     date = attr.ib(validator=attr.validators.instance_of(datetime.date))
     quantity = attr.ib(validator=attr.validators.instance_of(float))
@@ -46,10 +33,32 @@ class Operation(object):
         attr.validators.instance_of(str)),
                        converter=attr.converters.optional(str.upper))
 
-    @property
-    def amount(self):
-        return self.quantity * self.price
-
+    @staticmethod
+    async def drop_save_all(portfolio_name, operations):
+        pool = await utils.get_db()
+        async with pool.acquire() as con:
+            async with con.transaction():
+                await con.execute(
+                    "DELETE FROM operations "
+                    "WHERE portfolio_name = $1",
+                    portfolio_name,
+                )
+                await con.executemany(
+                    "INSERT INTO operations "
+                    "(portfolio_name, instrument_isin, type, date, "
+                    "quantity, price, fees, taxes, currency) "
+                    "VALUES "
+                    "($1, $2, $3, $4, $5, $6, $7, $8, $9) ",
+                    ((portfolio_name,
+                      op.instrument_isin,
+                      op.type.name.lower(),
+                      op.date,
+                      op.quantity,
+                      op.price,
+                      op.fees,
+                      op.taxes,
+                      op.currency)
+                     for op in operations))
 
 @attr.s
 class PortfolioInstrument(object):

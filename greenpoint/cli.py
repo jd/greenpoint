@@ -1,5 +1,5 @@
+import asyncio
 import logging
-import os
 
 import attr
 
@@ -17,7 +17,6 @@ from greenpoint import broker
 from greenpoint import config
 from greenpoint import instrument
 from greenpoint import portfolio as gportfolio
-from greenpoint import storage
 from greenpoint import utils
 
 
@@ -54,6 +53,7 @@ def broker_import(broker_name=None):
         brokers = [broker_name]
     else:
         brokers = conf['brokers'].keys()
+    loop = asyncio.get_event_loop()
     with click.progressbar(brokers,
                            label='Fetching transactions') as bar:
         for broker_name in bar:
@@ -67,9 +67,14 @@ def broker_import(broker_name=None):
                     "Unknown broker type %s" % broker_type)
 
             LOG.info("Importing transactions for %s", broker_name)
-            b = broker_type(broker_config)
-            txs = b.list_transactions()
-            storage.save_transactions(broker_name, txs)
+            b = broker_type(broker_name, broker_config)
+
+            async def _import_operations():
+                await gportfolio.Operation.drop_save_all(
+                    broker_name,
+                    await b.list_transactions())
+
+            loop.run_until_complete(_import_operations())
 
 
 def color_value(v):
@@ -169,6 +174,83 @@ def portfolio_show(broker):
                  "$", "L. Trade"],
         tablefmt='fancy_grid', floatfmt=".2f",
     ))
+
+
+@main.group(name="instrument")
+def instrument_group():
+    pass
+
+
+@instrument_group.command(name="list")
+def instrument_list():
+    loop = asyncio.get_event_loop()
+    instruments = []
+
+    for inst in loop.run_until_complete(
+            instrument.Instrument.list_instruments()):
+        headers = list(map(str.capitalize, attr.asdict(inst).keys()))
+        headers.remove("Is_alive")
+        values = []
+        for k, v in attr.asdict(inst).items():
+            if k == "exchange":
+                if v:
+                    values.append(v['name'])
+                else:
+                    values.append("?")
+            elif k == "type":
+                values.append(v.name)
+            elif k == "quotes":
+                values.append(len(v))
+            elif k == "name":
+                values.append(v[:28])
+            elif k in ("pea", "pea_pme", "ttf"):
+                if v:
+                    values.append("X")
+                else:
+                    values.append("")
+            elif k == "is_alive":
+                continue
+            else:
+                values.append(v)
+        instruments.append(values)
+
+    click.echo(tabulate.tabulate(
+        instruments,
+        headers=headers,
+        tablefmt='fancy_grid', floatfmt=".2f",
+    ))
+
+
+async def _update_instrument(name):
+    if name is None:
+        instruments = await instrument.Instrument.list_instruments()
+        click.echo("Updating %d instruments" % len(instruments))
+    else:
+        try:
+            instruments = [await instrument.Instrument.load(name=name)]
+        except TypeError:
+            raise click.ClickException("Unknown instrument %s" % name)
+        click.echo("Updating %s" % instruments[0])
+
+    futures = []
+    with click.progressbar(instruments,
+                           label='Scheduling quote updates') as insts:
+        for inst in insts:
+            futures.append(asyncio.ensure_future(inst.refresh_quotes()))
+            futures.append(asyncio.ensure_future(inst.refresh_live_quote()))
+    with click.progressbar(futures,
+                           label='Waiting for quote updates') as futs:
+        for fut in futs:
+            await fut
+
+
+@instrument_group.command(name="update")
+@click.argument('name', required=False)
+def instrument_update(name=None):
+    loop = asyncio.get_event_loop()
+
+    loop.run_until_complete(_update_instrument(name))
+    loop.close()
 
 
 if __name__ == '__main__':

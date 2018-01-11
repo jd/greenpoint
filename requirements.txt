@@ -10,4 +10,5 @@ attrs
 tabulate
 colorama
 termcolor
-psycopg2
+asyncpg
+aiohttp
