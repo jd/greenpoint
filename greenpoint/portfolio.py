@@ -1,13 +1,8 @@
 import datetime
 import enum
-import itertools
-import operator
 
 import attr
 
-import collections
-
-from greenpoint import instrument
 from greenpoint import utils
 
 
@@ -60,161 +55,46 @@ class Operation(object):
                       op.currency)
                      for op in operations))
 
-@attr.s
-class PortfolioInstrument(object):
-    txs = attr.ib(validator=attr.validators.instance_of(list))
-    instrument = attr.ib(
-        validator=attr.validators.instance_of(
-            instrument.Instrument),
-        init=False)
-    quantity = attr.ib(validator=attr.validators.instance_of(float),
-                       init=False,
-                       default=0.0)
-    price = attr.ib(validator=attr.validators.instance_of(float),
-                    init=False,
-                    default=0.0)
-    taxes = attr.ib(validator=attr.validators.instance_of(float),
-                    init=False,
-                    default=0.0)
-    dividend = attr.ib(validator=attr.validators.instance_of(float),
-                       init=False,
-                       default=0.0)
-    fees = attr.ib(validator=attr.validators.instance_of(float),
-                   init=False,
-                   default=0.0)
-    gain = attr.ib(validator=attr.validators.instance_of(float),
-                   init=False,
-                   default=0.0)
-    bought = attr.ib(validator=attr.validators.instance_of(float),
-                     init=False,
-                     default=0.0)
-    sold = attr.ib(validator=attr.validators.instance_of(float),
-                   init=False,
-                   default=0.0)
-    operations_count = attr.ib(
-        validator=attr.validators.instance_of(dict),
-        init=False,
-        default=attr.Factory(lambda: collections.defaultdict(lambda: 0))
-    )
-    average_price_bought = attr.ib(
-        validator=attr.validators.instance_of(float),
-        init=False,
-        default=0.0
-    )
-    average_price_sold = attr.ib(
-        validator=attr.validators.instance_of(float),
-        init=False,
-        default=0.0,
-    )
-    date_first = attr.ib(validator=attr.validators.instance_of(datetime.date),
-                         init=False)
-    date_last = attr.ib(validator=attr.validators.instance_of(datetime.date),
-                        init=False)
 
-    @txs.validator
-    def txs_validator(self, attribute, value):
-        if not value:
-            raise ValueError("At least one transaction is needed")
-        instruments = [tx.instrument for tx in self.txs]
-        instrument = instruments[0]
-        if not all(instrument == inst for inst in instruments):
-            raise ValueError(
-                "Transactions are not all for the same instrument")
-
-        currencies = [tx.currency for tx in self.txs]
-        currency = currencies[0]
-        if not all(currency == c for c in currencies):
-            raise ValueError(
-                "Transactions are not all in the same currency")
-
-        self.currency = currency
-        self.instrument = instrument
-
-    def __attrs_post_init__(self):
-        self.date_first = self.txs[0].date
-        self.date_last = self.txs[0].date
-
-        for tx in self.txs:
-            self.date_first = min(self.date_first, tx.date)
-            self.date_last = max(self.date_last, tx.date)
-            self.fees += tx.fees
-            self.taxes += tx.taxes
-            self.operations_count[tx.type] += 1
-            if tx.type == OperationType.BUY:
-                total = self.quantity + tx.quantity
-                if total != 0:
-                    self.price = (self.price * self.quantity + tx.amount) / total
-                    self.average_price_bought = (
-                        self.average_price_bought * self.bought + tx.amount
-                    ) / total
-                self.quantity = total
-                self.bought += tx.quantity
-            elif tx.type == OperationType.SELL:
-                self.quantity -= tx.quantity
-                self.gain += (tx.price - self.price) * tx.quantity
-                total = tx.quantity + self.sold
-                if total != 0:
-                    self.average_price_sold = (
-                        (self.average_price_sold * self.sold) + tx.amount
-                    ) / total
-                self.sold += tx.quantity
-            elif tx.type == OperationType.DIVIDEND:
-                self.dividend += tx.amount
-
-    def potential_gain(self, since=None):
-        # FIXME(jd) currency conversion
-        # if self.instrument.currency != self.currency:
-        #     convert
-        quote = self.instrument.quote
-        if quote is None:
-            return None
-        if since is None:
-            price = self.price
-        else:
-            try:
-                previous_quote = self.instrument.quotes[
-                    :quote.date - datetime.timedelta(days=1)
-                ][-1]
-            except KeyError:
-                return None
-            price = previous_quote.close
-        return (quote.close - price) * self.quantity
-
-
-ATTRGETTER_INSTRUMENT = operator.attrgetter('instrument')
-
-
-def _get_class_name(o):
-    return type(o).__name__
-
-
-@attr.s(frozen=True)
-class Portfolio(object):
-
-    txs = attr.ib(validator=attr.validators.instance_of(
-        list))
-
-    def get_portfolio(self, date=None):
-        instruments = []
-        currencies = collections.defaultdict(lambda: 0)
-
-        for type_, txs in itertools.groupby(
-                sorted(self.txs, key=_get_class_name),
-                key=_get_class_name):
-
-            if type_ == 'CashOperation':
-                for tx in txs:
-                    if date is None or tx.date <= date:
-                        currencies[tx.currency] += tx.amount
-
-            elif type_ == 'Operation':
-                for _, gtxs in itertools.groupby(
-                        sorted((tx for tx in txs
-                                if date is None or tx.date <= date),
-                               key=ATTRGETTER_INSTRUMENT),
-                        key=ATTRGETTER_INSTRUMENT):
-                    instruments.append(PortfolioInstrument(list(gtxs)))
-            else:
-                raise RuntimeError("Unknown operation type")
-
-        return instruments, currencies
+async def get_status():
+    pool = await utils.get_db()
+    return await pool.fetch(
+        """
+select *,
+       position * latest_quote as market_value,
+       round(((latest_quote - ppu) * position)::numeric, 2) as potential_gain,
+       round((100 * (latest_quote - ppu) / ppu)::numeric, 2) as potential_gain_pct
+from (
+    select distinct on (instrument_isin) instrument_isin,
+           instruments.name,
+           date as latest_trade,
+           position,
+           case when total_bought = 0 then null else round(total_spent / total_bought, 2) end as ppu,
+           partition_total.currency as op_currency,
+           latest_quote,
+           instruments.currency as instrument_currency,
+           latest_quote_time
+    from (
+        select *,
+               sum(greatest(0, quantity)) over w as total_bought,
+               sum(greatest(0, (quantity * price) - fees - taxes)) over w as total_spent
+        from (
+            select *,
+                   sum(case when position = 0 then 1 else 0 end) over w as ownership_partition
+            from (
+                    select instrument_isin, date, quantity, price, currency, fees, taxes,
+                    sum(quantity) over w as position
+                    from operations
+                    where type = 'trade'
+                    window w as (partition by (instrument_isin) order by date, quantity desc)
+            ) as summed
+            window w as (partition by (instrument_isin) order by date, quantity desc)
+        ) as sum_partitioned
+        window w as (partition by (instrument_isin, ownership_partition) order by date)
+    ) as partition_total, instruments
+    where instrument_isin = instruments.isin
+    order by instrument_isin, ownership_partition desc, date desc
+) as finalfiltering
+where position != 0
+order by market_value
+""")

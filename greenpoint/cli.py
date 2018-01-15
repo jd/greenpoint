@@ -77,11 +77,13 @@ def broker_import(broker_name=None):
             loop.run_until_complete(_import_operations())
 
 
-def color_value(v):
+def color_value(v, suffix=""):
+    if v is None:
+        return
     if v < 0:
-        return termcolor.colored("%.2f" % v, "red")
+        return termcolor.colored("%.2f%s" % (v, suffix), "red")
     if v > 0:
-        return termcolor.colored("%.2f" % v, "green")
+        return termcolor.colored("%.2f%s" % (v, suffix), "green")
     return v
 
 
@@ -90,90 +92,44 @@ def portfolio_group():
     pass
 
 
-@portfolio_group.command(name="txs")
-@click.argument('broker')
-@click.option('--date')
-@click.option('--all', 'include_all', is_flag=True)
-def portfolio_txs(broker, date=None, include_all=False):
-    if date is not None:
-        date = utils.parse_date(date)
-
-    pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
-    instruments, currencies = pfl.get_portfolio(date)
-
-    print(tabulate.tabulate(
-        [
-            [
-                termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
-                pi.quantity,
-                pi.price, pi.taxes, pi.dividend, pi.fees,
-                color_value(pi.gain),
-                pi.bought, pi.sold,
-                pi.average_price_bought, pi.average_price_sold,
-                pi.currency,
-                pi.date_first, pi.date_last
-            ] for pi in sorted(instruments, key=lambda pi: pi.instrument.name)
-            # Use != so we show what might be negative and is a "bug"
-            if include_all or pi.quantity != 0
-        ],
-        headers=["Instrument", "Qty", "Price", "Taxes", "Div.", "Fees",
-                 "Gain", "Bought", "Sold", "Avg P. Bought", "Avg P. Sold",
-                 "$",
-                 "First", "Last"],
-        tablefmt='fancy_grid', floatfmt=".2f"),
-    )
-
-    print(tabulate.tabulate(
-        [
-            [color_value(sum(pi.gain for pi in instruments))],
-        ],
-        headers=(termcolor.colored("Gain"),),
-        tablefmt='fancy_grid', floatfmt=".2f")
-    )
-
-    print(tabulate.tabulate([[termcolor.colored(k, attrs=['bold']),
-                              color_value(v)]
-                             for k, v in currencies.items()],
-                            headers=["Currency", "Amount"],
-                            tablefmt='fancy_grid', floatfmt=".2f"))
-
-
 @portfolio_group.command(name="show")
-@click.argument('broker')
-def portfolio_show(broker):
-    pfl = gportfolio.Portfolio(txs=storage.load_transactions(broker))
-    instruments, currencies = pfl.get_portfolio()
+def portfolio_show():
+    loop = asyncio.get_event_loop()
+    status = loop.run_until_complete(gportfolio.get_status())
 
-    lines = []
-    for pi in sorted(instruments, key=lambda pi: pi.instrument.name):
-        # Use == so we show what might be negative and is a "bug"
-        if pi.quantity == 0:
-            continue
+    headers = {
+        "instrument_isin": "ISIN",
+        "name": "Name",
+        "latest_trade": "Latest trade",
+        "position": "Position",
+        "ppu": "PPU",
+        "latest_quote": "Quote",
+        "latest_quote_time": "@",
+        "market_value": "Mkt val",
+        "potential_gain": "Gain",
+        "potential_gain_pct": "Gain %",
+    }
 
-        potential_gain = pi.potential_gain()
-        potential_gain_since_last = pi.potential_gain(-1)
+    if status:
+        lines = []
+        for line in status:
+            values = []
+            for k, v in line.items():
+                if k in headers.keys():
+                    if k == 'name':
+                        v = v[:30]
+                    elif k == 'potential_gain':
+                        v = color_value(v)
+                    elif k == 'potential_gain_pct':
+                        v = color_value(v, "%")
+                    values.append(v)
+            lines.append(values)
 
-        lines.append([
-            termcolor.colored(pi.instrument.name[:30], attrs=['bold']),
-            pi.quantity,
-            # FIXME(jd) Compute price with fees and taxes
-            pi.price,
-            pi.instrument.quote.close if pi.instrument.quote else "?",
-            color_value(potential_gain)
-            if potential_gain is not None else "?",
-            color_value(potential_gain_since_last)
-            if potential_gain_since_last is not None else "?",
-            pi.currency,
-            pi.instrument.quote.date if pi.instrument.quote else "?",
-        ])
-
-    print(tabulate.tabulate(
-        lines,
-        headers=["Instrument", "Qty", "B. Price", "M. Price",
-                 "Gain", "Last Daily Gain",
-                 "$", "L. Trade"],
-        tablefmt='fancy_grid', floatfmt=".2f",
-    ))
+        print(tabulate.tabulate(
+            lines,
+            headers=headers.values(),
+            tablefmt='fancy_grid', floatfmt=".2f",
+        ))
 
 
 @main.group(name="instrument")

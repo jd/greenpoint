@@ -49,5 +49,3 @@ CREATE TABLE operations (
        taxes numeric(15, 6) NOT NULL,
        currency text NOT NULL
 );
-
--- SELECT * FROM (select portfolio_name, instrument_isin, instruments.name, sum(quantity) AS quantity from operations, instruments WHERE operations.type = 'trade' AND instruments.isin = operations.instrument_isin GROUP BY (portfolio_name, instrument_isin, instruments.name)) AS pfl WHERE pfl.quantity != 0 ORDER BY (portfolio_name, name);
