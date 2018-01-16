@@ -68,11 +68,15 @@ async def get_status_for_broker(name):
 async def get_status_for_all():
     pool = await utils.get_db()
     return await pool.fetch(
-        "select * from ("
+        "select *, "
+        "position * latest_quote as market_value, "
+        "round(((latest_quote - ppu) * position)::numeric, 2) as potential_gain, "
+        "round((100 * (latest_quote - ppu) / ppu)::numeric, 2) as potential_gain_pct "
+        "from ("
         "  select instrument_isin, "
         "         sum(position) as position, "
         "         sum(ppu * position) / sum(position) as ppu, "
-        "         max(latest_trade) as latest_trade "
+        "         max(date) as latest_trade "
         "  from portfolios "
         "  where position != 0 "
         "  group by instrument_isin "
