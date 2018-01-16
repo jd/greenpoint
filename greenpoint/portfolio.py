@@ -56,45 +56,26 @@ class Operation(object):
                      for op in operations))
 
 
-async def get_status():
+async def get_status_for_broker(name):
     pool = await utils.get_db()
     return await pool.fetch(
-        """
-select *,
-       position * latest_quote as market_value,
-       round(((latest_quote - ppu) * position)::numeric, 2) as potential_gain,
-       round((100 * (latest_quote - ppu) / ppu)::numeric, 2) as potential_gain_pct
-from (
-    select distinct on (instrument_isin) instrument_isin,
-           instruments.name,
-           date as latest_trade,
-           position,
-           case when total_bought = 0 then null else round(total_spent / total_bought, 2) end as ppu,
-           partition_total.currency as op_currency,
-           latest_quote,
-           instruments.currency as instrument_currency,
-           latest_quote_time
-    from (
-        select *,
-               sum(greatest(0, quantity)) over w as total_bought,
-               sum(greatest(0, (quantity * price) - fees - taxes)) over w as total_spent
-        from (
-            select *,
-                   sum(case when position = 0 then 1 else 0 end) over w as ownership_partition
-            from (
-                    select instrument_isin, date, quantity, price, currency, fees, taxes,
-                    sum(quantity) over w as position
-                    from operations
-                    where type = 'trade'
-                    window w as (partition by (instrument_isin) order by date, quantity desc)
-            ) as summed
-            window w as (partition by (instrument_isin) order by date, quantity desc)
-        ) as sum_partitioned
-        window w as (partition by (instrument_isin, ownership_partition) order by date)
-    ) as partition_total, instruments
-    where instrument_isin = instruments.isin
-    order by instrument_isin, ownership_partition desc, date desc
-) as finalfiltering
-where position != 0
-order by market_value
-""")
+        "select * from portfolios "
+        "JOIN instruments ON instrument_isin = isin "
+        "where position != 0 and portfolio_name = $1;",
+        name)
+
+
+async def get_status_for_all():
+    pool = await utils.get_db()
+    return await pool.fetch(
+        "select * from ("
+        "  select instrument_isin, "
+        "         sum(position) as position, "
+        "         sum(ppu * position) / sum(position) as ppu, "
+        "         max(latest_trade) as latest_trade "
+        "  from portfolios "
+        "  where position != 0 "
+        "  group by instrument_isin "
+        ") as aggregated "
+        "join instruments on aggregated.instrument_isin = isin"
+    )

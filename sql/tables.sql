@@ -1,4 +1,4 @@
-CREATE TABLE exchanges (
+CREATE TABLE IF NOT EXISTS exchanges (
        mic text CHECK (upper(mic) = mic) PRIMARY KEY,
        operating_mic text CHECK (upper(operating_mic) = operating_mic) NOT NULL,
        name text NOT NULL,
@@ -8,9 +8,9 @@ CREATE TABLE exchanges (
        comments text
 );
 
-CREATE TYPE instrument_type AS ENUM ('stock', 'etf', 'fund');
+CREATE TYPE IF NOT EXISTS instrument_type AS ENUM ('stock', 'etf', 'fund');
 
-CREATE TABLE instruments (
+CREATE TABLE IF NOT EXISTS instruments (
        isin text CHECK (upper(isin) = isin) PRIMARY KEY,
        name text NOT NULL,
        type instrument_type NOT NULL,
@@ -25,7 +25,7 @@ CREATE TABLE instruments (
        latest_quote_time timestamp with time zone
 );
 
-CREATE TABLE quotes (
+CREATE TABLE IF NOT EXISTS quotes (
        instrument_isin text REFERENCES instruments(isin) NOT NULL,
        date date NOT NULL,
        open numeric(15, 6),
@@ -36,9 +36,9 @@ CREATE TABLE quotes (
        UNIQUE (instrument_isin, date)
 );
 
-CREATE TYPE operation_type AS ENUM ('trade', 'dividend', 'tax');
+CREATE TYPE IF NOT EXISTS operation_type AS ENUM ('trade', 'dividend', 'tax');
 
-CREATE TABLE operations (
+CREATE TABLE IF NOT EXISTS operations (
        portfolio_name text NOT NULL,
        instrument_isin text REFERENCES instruments(isin) NOT NULL,
        type operation_type NOT NULL,
@@ -49,3 +49,31 @@ CREATE TABLE operations (
        taxes numeric(15, 6) NOT NULL,
        currency text NOT NULL
 );
+
+CREATE OR REPLACE VIEW portfolios AS
+select distinct on (portfolio_name, instrument_isin)
+       portfolio_name,
+       instrument_isin,
+       date as latest_trade,
+       position,
+       case when total_bought = 0 then null else round(total_spent / total_bought, 2) end as ppu,
+       currency
+from (
+    select *,
+           sum(greatest(0, quantity)) over w as total_bought,
+           sum(greatest(0, (quantity * price) - fees - taxes)) over w as total_spent
+    from (
+        select *,
+               sum(case when position = 0 then 1 else 0 end) over w as ownership_partition
+        from (
+                select instrument_isin, date, quantity, price, currency, fees, taxes, portfolio_name,
+                sum(quantity) over w as position
+                from operations
+                where type = 'trade'
+                window w as (partition by (portfolio_name, instrument_isin) order by date, quantity desc)
+        ) as summed
+        window w as (partition by (portfolio_name, instrument_isin) order by date, quantity desc)
+    ) as sum_partitioned
+    window w as (partition by (portfolio_name, instrument_isin, ownership_partition) order by date)
+) as partition_total
+order by portfolio_name, instrument_isin, ownership_partition desc, date desc

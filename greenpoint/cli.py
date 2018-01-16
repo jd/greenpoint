@@ -93,9 +93,15 @@ def portfolio_group():
 
 
 @portfolio_group.command(name="show")
-def portfolio_show():
+@click.argument('broker_name', required=False, default=None)
+def portfolio_show(broker_name=None):
     loop = asyncio.get_event_loop()
-    status = loop.run_until_complete(gportfolio.get_status())
+    if broker_name:
+        f = gportfolio.get_status_for_broker(broker_name)
+    else:
+        f = gportfolio.get_status_for_all()
+
+    status = loop.run_until_complete(f)
 
     headers = {
         "instrument_isin": "ISIN",
@@ -111,6 +117,7 @@ def portfolio_show():
     }
 
     if status:
+        real_headers = []
         lines = []
         for line in status:
             values = []
@@ -123,11 +130,13 @@ def portfolio_show():
                     elif k == 'potential_gain_pct':
                         v = color_value(v, "%")
                     values.append(v)
+                    if len(real_headers) != len(values):
+                        real_headers.append(headers[k])
             lines.append(values)
 
         print(tabulate.tabulate(
             lines,
-            headers=headers.values(),
+            headers=real_headers,
             tablefmt='fancy_grid', floatfmt=".2f",
         ))
 
