@@ -8,7 +8,7 @@ CREATE TABLE IF NOT EXISTS exchanges (
        comments text
 );
 
-CREATE TYPE IF NOT EXISTS instrument_type AS ENUM ('stock', 'etf', 'fund');
+CREATE TYPE instrument_type AS ENUM ('stock', 'etf', 'fund');
 
 CREATE TABLE IF NOT EXISTS instruments (
        isin text CHECK (upper(isin) = isin) PRIMARY KEY,
@@ -36,7 +36,7 @@ CREATE TABLE IF NOT EXISTS quotes (
        UNIQUE (instrument_isin, date)
 );
 
-CREATE TYPE IF NOT EXISTS operation_type AS ENUM ('trade', 'dividend', 'tax');
+CREATE TYPE operation_type AS ENUM ('trade', 'dividend', 'tax');
 
 CREATE TABLE IF NOT EXISTS operations (
        portfolio_name text NOT NULL,
@@ -50,14 +50,14 @@ CREATE TABLE IF NOT EXISTS operations (
        currency text NOT NULL
 );
 
-CREATE OR REPLACE VIEW portfolios AS
-select distinct on (portfolio_name, instrument_isin)
-       portfolio_name,
+CREATE OR REPLACE VIEW portfolios_history AS
+select portfolio_name,
        instrument_isin,
-       date as latest_trade,
+       date,
        position,
        case when total_bought = 0 then null else round(total_spent / total_bought, 2) end as ppu,
-       currency
+       currency,
+       ownership_partition
 from (
     select *,
            sum(greatest(0, quantity)) over w as total_bought,
@@ -76,4 +76,33 @@ from (
     ) as sum_partitioned
     window w as (partition by (portfolio_name, instrument_isin, ownership_partition) order by date)
 ) as partition_total
-order by portfolio_name, instrument_isin, ownership_partition desc, date desc
+order by portfolio_name, instrument_isin, ownership_partition desc, date desc;
+
+
+CREATE OR REPLACE VIEW portfolios AS
+select distinct on (portfolio_name, instrument_isin)
+       *
+from portfolios_history
+order by portfolio_name, instrument_isin, ownership_partition desc, date desc;
+
+
+CREATE OR REPLACE FUNCTION portfolios_at(_date date)
+  RETURNS TABLE (
+          portfolio_name text,
+          instrument_isin text,
+          date date,
+          position_ numeric,
+          ppu numeric,
+          currency text,
+          ownership_partition bigint
+  ) AS
+  $$
+  select * from (
+    select distinct on (portfolio_name, instrument_isin)
+           portfolios_history.*
+    from portfolios_history
+    where date < _date
+  ) as summary
+  where summary.position != 0
+  $$
+  LANGUAGE sql;

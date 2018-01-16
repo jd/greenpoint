@@ -106,7 +106,7 @@ def portfolio_show(broker_name=None):
     headers = {
         "instrument_isin": "ISIN",
         "name": "Name",
-        "latest_trade": "Latest trade",
+        "date": "Latest trade",
         "position": "Position",
         "ppu": "PPU",
         "latest_quote": "Quote",
