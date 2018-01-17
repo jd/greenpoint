@@ -14,7 +14,6 @@ import tabulate
 import termcolor
 
 from greenpoint import broker
-from greenpoint import config
 from greenpoint import instrument
 from greenpoint import portfolio as gportfolio
 from greenpoint import utils
@@ -38,7 +37,7 @@ def broker_():
 @broker_.command(name="list",
                  help="List configured brokers")
 def broker_list():
-    conf = config.get_config()
+    conf = utils.get_config()
     for b in conf['brokers'].keys():
         click.echo(b)
 
@@ -48,7 +47,7 @@ def broker_list():
                  "Import all brokers by default.")
 @click.argument('broker_name', required=False, default=None)
 def broker_import(broker_name=None):
-    conf = config.get_config()
+    conf = utils.get_config()
     if broker_name is not None:
         brokers = [broker_name]
     else:

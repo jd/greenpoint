@@ -6,6 +6,8 @@ from dateutil import tz
 
 import iso8601
 
+import yaml
+
 
 def grouper(iterable, n):
     it = iter(iterable)
@@ -16,11 +18,22 @@ def grouper(iterable, n):
         yield chunk
 
 
-POOL = asyncpg.pool.create_pool("postgresql:///greenpoint", max_size=50)
+def get_config():
+    with open("config.yaml") as f:
+        return yaml.load(f.read())
+
+
+POOL = None
 
 
 async def get_db():
-    await POOL
+    global POOL
+    if POOL is None:
+        dburl = get_config().get('database')
+        if not dburl:
+            raise RuntimeError("No `database` in configuration file")
+        POOL = asyncpg.pool.create_pool(dburl, max_size=50)
+        await POOL
     return POOL
 
 
