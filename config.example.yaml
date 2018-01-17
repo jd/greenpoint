@@ -1,0 +1,6 @@
+brokers:
+  Fortuneo PEA:
+    type: fortuneo
+    account: pea
+    login: 1234567
+    password: ult1m4t3!gr33np01nt
