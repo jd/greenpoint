@@ -1,3 +1,4 @@
+import asyncio
 import itertools
 import weakref
 
@@ -27,8 +28,10 @@ def get_config():
 POOLS = weakref.WeakKeyDictionary()
 
 
-async def get_db(loop):
+async def get_db(loop=None):
     global POOLS
+    if loop is None:
+        loop = asyncio.get_event_loop()
     if loop not in POOLS:
         dburl = get_config().get('database')
         if not dburl:
