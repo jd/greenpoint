@@ -33,3 +33,9 @@ To update instruments quotes::
 To display your portfolio::
 
   $ greenpoint portfolio show
+
+To run the Web interface::
+
+  $ greenpoint web
+
+And connect on https://localhost:5000

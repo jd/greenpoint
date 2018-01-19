@@ -12,3 +12,5 @@ colorama
 termcolor
 asyncpg
 aiohttp
+flask
+flask-restful

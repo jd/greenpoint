@@ -56,8 +56,8 @@ class Operation(object):
                      for op in operations))
 
 
-async def get_status_for_broker(name):
-    pool = await utils.get_db()
+async def get_status_for_broker(name, loop=None):
+    pool = await utils.get_db(loop=loop)
     return await pool.fetch(
         "select * from portfolios "
         "JOIN instruments ON instrument_isin = isin "
@@ -65,8 +65,8 @@ async def get_status_for_broker(name):
         name)
 
 
-async def get_status_for_all():
-    pool = await utils.get_db()
+async def get_status_for_all(loop=None):
+    pool = await utils.get_db(loop=loop)
     return await pool.fetch(
         "select *, "
         "position * latest_quote as market_value, "

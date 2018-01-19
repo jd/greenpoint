@@ -17,7 +17,7 @@ from greenpoint import broker
 from greenpoint import instrument
 from greenpoint import portfolio as gportfolio
 from greenpoint import utils
-
+from greenpoint import web as gweb
 
 LOG = daiquiri.getLogger(__name__)
 
@@ -27,6 +27,11 @@ LOG = daiquiri.getLogger(__name__)
 def main(debug=False):
     colorama.init()
     daiquiri.setup(level=logging.DEBUG if debug else logging.WARNING)
+
+
+@main.command(name="web")
+def web():
+    return gweb.app.run(debug=True)
 
 
 @main.group(name="broker")

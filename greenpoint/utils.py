@@ -1,4 +1,5 @@
 import itertools
+import weakref
 
 import asyncpg.pool
 
@@ -23,18 +24,18 @@ def get_config():
         return yaml.load(f.read())
 
 
-POOL = None
+POOLS = weakref.WeakKeyDictionary()
 
 
-async def get_db():
-    global POOL
-    if POOL is None:
+async def get_db(loop):
+    global POOLS
+    if loop not in POOLS:
         dburl = get_config().get('database')
         if not dburl:
             raise RuntimeError("No `database` in configuration file")
-        POOL = asyncpg.pool.create_pool(dburl, max_size=50)
-        await POOL
-    return POOL
+        POOLS[loop] = asyncpg.pool.create_pool(dburl, max_size=50, loop=loop)
+        await POOLS[loop]
+    return POOLS[loop]
 
 
 LOCAL_TIMEZONE = tz.gettz()
