@@ -189,7 +189,7 @@ class Instrument(object):
                 "http://www.boursorama.com/recherche/index.phtml?q=" +
                 self.isin) as r:
             try:
-                symbol = r.url.split("symbole=")[1]
+                symbol = str(r.url).split("symbole=")[1]
             except IndexError:
                 return quotes
 
