@@ -5,12 +5,15 @@ import decimal
 
 import flask
 
+import flask_cors
+
 import flask_restful
 
 from greenpoint import portfolio
 
 
 app = flask.Flask(__name__)
+flask_cors.CORS(app)
 
 
 class Portfolio(flask_restful.Resource):
