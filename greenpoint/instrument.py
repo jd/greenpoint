@@ -1,6 +1,7 @@
 import asyncio
 import datetime
 import itertools
+import json
 import re
 
 import aiohttp
@@ -206,7 +207,9 @@ class Instrument(object):
                 "Qa4g9b3Or1cNq6Rv7_C5cXASbmQgUjM5"
                 "cXPYtqVLRwRgdXqyx7k2f5so5W4zckr8YdX3Xo0-_w-T0B0RLa1wn"
         ) as r:
-            json = await r.json()
+            # NOTE Content-Type is wrong, so cannot use r.json() here
+            content = await r.read()
+            json = json.loads(content)
             for point in json['dataSets'][0]['dataProvider']:
                 d = datetime.datetime.strptime(
                     point['d'][:-6], "%d/%m/%Y").date()
