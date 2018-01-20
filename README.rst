@@ -16,11 +16,11 @@ Use pip::
 Once installed, edit `config.yaml` and add your account and the URL of your
 PostgreSQL database. The database must exist.
 
-You can then initialize the databse with::
+You can then initialize the database with::
 
+  $ createdb greenpoint
+  $ export PGDATABASE=greenpoint
   $ make sql
-
-`pgloader <http://pgloader.io>` is needed to load the exchange CSV.
 
 You can then import all transactions::
 

@@ -6,7 +6,6 @@ DROP VIEW portfolios_history;
 DROP TABLE operations;
 DROP TABLE quotes;
 DROP TABLE instruments;
-DROP TABLE exchanges;
 
 DROP TYPE operation_type;
 DROP TYPE instrument_type;
