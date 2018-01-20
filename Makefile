@@ -2,4 +2,7 @@ sql:
 	psql greenpoint < sql/tables.sql
 	pgloader sql/exchanges.pgloader
 
-.PHONY: sql
+clean-sql:
+	psql greenpoint < sql/delete.sql
+
+.PHONY: sql clean-sql
