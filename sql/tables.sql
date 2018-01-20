@@ -1,4 +1,4 @@
-CREATE TYPE instrument_type AS ENUM ('stock', 'etf', 'fund');
+CREATE TYPE instrument_type AS ENUM ('stock', 'etf', 'fund', 'currency');
 
 CREATE TABLE IF NOT EXISTS instruments (
        isin text CHECK (upper(isin) = isin) PRIMARY KEY,
@@ -14,6 +14,9 @@ CREATE TABLE IF NOT EXISTS instruments (
        latest_quote float,
        latest_quote_time timestamp with time zone
 );
+
+INSERT INTO instruments(isin, name, type, currency, latest_quote)
+       VALUES ('EUR', 'Euro', 'currency', 'EUR', 1.0);
 
 CREATE TABLE IF NOT EXISTS quotes (
        instrument_isin text REFERENCES instruments(isin) NOT NULL,

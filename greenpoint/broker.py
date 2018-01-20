@@ -30,6 +30,8 @@ class Fortuneo(object):
     HISTORY_PAGE = ("https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s"
                     "/historique/historique-titres.jsp?ca=%s")
 
+    CASH_PAGE = ("https://mabanque.fortuneo.fr/fr/prive/mes-comptes/%s"
+                 "/situation/portefeuille-temps-reel.jsp?ca=%s")
     INSTRUMENT_SEARCH_PAGE = "https://www.fortuneo.fr/recherche?term=%s"
 
     with open(os.path.join(os.path.dirname(__file__),
@@ -56,9 +58,11 @@ class Fortuneo(object):
         if self.account_type in ('pea', 'ppe'):
             self.history_page = self.HISTORY_PAGE % (self.account_type,
                                                      account_id)
+            self.cash_page = self.CASH_PAGE % (self.account_type, account_id)
         elif self.account_type == 'ord':
             self.history_page = self.HISTORY_PAGE % ("compte-titres-pea",
                                                      account_id)
+            self.cash_page = self.CASH_PAGE % ("compte-titres-pea", account_id)
         else:
             raise ValueError("No valid `account` specified in config")
 
@@ -212,7 +216,24 @@ class Fortuneo(object):
             start = end - step
 
     async def list_transactions(self):
-        txs = []
+        LOG.debug("Getting cash info")
+        page = self.session.get(self.cash_page)
+        tree = html.fromstring(page.content)
+        cash = self._to_float(tree.xpath(
+            "//*[@id=\"valorisation_compte\"]/table/tr[3]/td[2]/text()"
+        )[0])
+
+        today = datetime.datetime.utcnow().date()
+        txs = [portfolio.Operation(
+            instrument_isin="EUR",
+            type=portfolio.OperationType.TRADE,
+            date=today,
+            quantity=cash,
+            price=1.0,
+            fees=0.0,
+            taxes=0.0,
+            currency="EUR",
+        )]
 
         for start, end in self._iter_on_time():
             page = self.session.post(
