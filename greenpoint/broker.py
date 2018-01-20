@@ -68,7 +68,7 @@ class Fortuneo(object):
         if op in ("vente comptant", "rachat part sicav externe"):
             return "sell"
         elif op in ("achat comptant", "script-parts sicav externe",
-                    "Dépôt de titres vifs"):
+                    "dépôt de titres vifs"):
             return "buy"
         elif op.startswith("encaissement coupons"):
             return portfolio.OperationType.DIVIDEND
