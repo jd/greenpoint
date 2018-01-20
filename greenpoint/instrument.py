@@ -153,13 +153,13 @@ class Instrument(object):
         await cur.execute(
             "INSERT INTO instruments "
             "(isin, name, type, symbol, pea, pea_pme, ttf, "
-            "exchange_mic, currency) "
-            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9)"
+            "exchange_mic, currency, latest_quote) "
+            "VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)"
             "ON CONFLICT ON CONSTRAINT instruments_pkey "
             "DO NOTHING",
             self.isin, self.name, self.type.name.lower(),
             self.symbol, self.pea, self.pea_pme, self.ttf, self.exchange_mic,
-            self.currency,
+            self.currency, self.latest_quote,
         )
 
     @classmethod

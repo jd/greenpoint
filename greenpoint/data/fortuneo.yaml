@@ -12,6 +12,18 @@ instruments:
   "SANOFI": "FR0000120578"
   "LVMH": "FR0000121014"
   "SECHE ENVIRONNEM.": "https://bourse.fortuneo.fr/actions/cours-seche-environnem-SCHP-FR0000039109-23"
+  "DUCK ME":
+    isin: "-"
+    type: stock
+    name: Duck Me
+    pea: true
+    pea_pme: true
+    ttf: false
+    symbol: null
+    exchange_mic: null
+    currency: EUR
+    is_alive: True
+    latest_quote: 375.0
   "OCTO TECHNOLOGY":
     isin: FR0004157428
     type: stock
