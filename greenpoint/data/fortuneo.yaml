@@ -13,7 +13,8 @@ instruments:
   "LVMH": "FR0000121014"
   "SECHE ENVIRONNEM.": "https://bourse.fortuneo.fr/actions/cours-seche-environnem-SCHP-FR0000039109-23"
   "DUCK ME":
-    isin: "-"
+    # Random ISIN
+    isin: "FRDUCKME"
     type: stock
     name: Duck Me
     pea: true
