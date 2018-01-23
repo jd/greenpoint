@@ -210,8 +210,8 @@ class Instrument(object):
         ) as r:
             # NOTE Content-Type is wrong, so cannot use r.json() here
             content = await r.read()
-            json = json.loads(content)
-            for point in json['dataSets'][0]['dataProvider']:
+            json_content = json.loads(content)
+            for point in json_content['dataSets'][0]['dataProvider']:
                 d = datetime.datetime.strptime(
                     point['d'][:-6], "%d/%m/%Y").date()
                 if start is not None and d < start:
