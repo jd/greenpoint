@@ -118,6 +118,7 @@ def portfolio_show(broker_name=None):
         "market_value": "Mkt val",
         "potential_gain": "Gain",
         "potential_gain_pct": "Gain %",
+        "weight": "Weight",
     }
 
     if status:
@@ -129,6 +130,8 @@ def portfolio_show(broker_name=None):
                 if k in headers.keys():
                     if k == 'name':
                         v = v[:30]
+                    elif k == 'weight':
+                        v = color_value(v, "%")
                     elif k == 'potential_gain':
                         v = color_value(v)
                     elif k == 'potential_gain_pct':

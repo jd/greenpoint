@@ -70,6 +70,7 @@ async def get_status_for_all(loop=None):
     return await pool.fetch(
         "select *, "
         "position * latest_quote as market_value, "
+        "(100 * position * latest_quote) / sum(position * latest_quote) over () as weight, "
         "round(((latest_quote - ppu) * position)::numeric, 2) as potential_gain, "
         "round((100 * (latest_quote - ppu) / ppu)::numeric, 2) as potential_gain_pct "
         "from ("
