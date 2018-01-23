@@ -43,6 +43,7 @@ class InstrumentType(enum.Enum):
     ETF = "etf"
     STOCK = "stock"
     FUND = "fund"
+    CURRENCY = "currency"
 
     @classmethod
     def strtoenum(cls, value):
