@@ -197,9 +197,14 @@ class Fortuneo(object):
         else:
             raise ValueError("Unable to find info for %s", name)
 
-        instrument_kwargs['currency'] = tree.xpath(
+        currency = tree.xpath(
             '//div[@class="digest-header-number"]/span/text()'
         )[0].rsplit(" ", 1)[-1]
+
+        if currency == "GBP":
+            currency = "GBX"
+
+        instrument_kwargs['currency'] = currency
 
         data = await instrument.Instrument.load(**instrument_kwargs)
         LOG.debug("Found info %s", data)
