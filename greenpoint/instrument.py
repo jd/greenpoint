@@ -415,7 +415,11 @@ class Instrument(object):
         if not len(result):
             return
         result = result[0]
-        currency = result['currency'].upper()
+        currency = result['currency']
+
+        if currency == "GBp":
+            currency = "GBX"
+
         if currency != self.currency:
             raise ValueError(
                 "Quote returned by Yahoo is in "
